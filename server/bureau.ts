@@ -324,6 +324,8 @@ export class Bureau {
     }
     let l = cur.live;
     if (!l || !l.proc.alive) l = this.spawn(cur);
+    // mode projet : chaque nouvelle demande repasse par un plan à valider (une précision en plein travail, non)
+    else if (this.ownFolder(cur.mission) && cur.mission.status !== 'working') l.proc.setPermissionMode('plan');
     if (cur.idleTimer) { clearTimeout(cur.idleTimer); cur.idleTimer = null; }
     l.lastText = clean;
     cur.stopAsked = false;
@@ -336,6 +338,9 @@ export class Bureau {
     this.record(cur, { k: 'start', text: clean });
     l.proc.send(clean);
   }
+
+  /** Le mode de permission pour travailler (une fois le plan validé, en mode projet). */
+  private workMode() { return this.settings.permission === 'ask' ? 'acceptEdits' : 'auto'; }
 
   private spawn(cur: Current, opts: { fresh?: boolean } = {}): Live {
     if (!this.claude) throw new Error('Claude Code n’est pas installé sur cet ordinateur.');
@@ -351,10 +356,12 @@ export class Bureau {
     });
     const proc: ClaudeProcess = new ClaudeProcess(
       {
-        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: s.permission === 'ask' ? 'acceptEdits' : 'auto',
+        // mode projet : Max commence en mode plan (il explore, puis te soumet son plan avant de coder)
+        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: this.ownFolder(cur.mission) ? 'plan' : this.workMode(),
         model: s.chefModel || undefined, resume, tools: SESSION_TOOLS, allowedTools: ALWAYS_ALLOWED,
         agents: agentsJson(s, this.ownFolder(cur.mission)),
         appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
+        restricted: !this.ownFolder(cur.mission),
       },
       (m) => {
         if (cur.live?.proc !== proc) return; // un ancien processus qui parle encore
@@ -563,13 +570,23 @@ export class Bureau {
     else this.finish(cur, false, cur.lastChefText, 0, true);
   }
 
-  answer(requestId: string, allow: boolean) {
+  answer(requestId: string, allow: boolean, message?: string) {
     const cur = this.current;
     const l = cur?.live;
     if (!cur || !l || !l.norm.hasRequest(requestId)) return;
-    l.proc.answerPermission(requestId, allow, l.norm.inputOf(requestId));
+    const plan = l.norm.toolOf(requestId) === 'ExitPlanMode';
+    const note = message?.trim();
+    // le plan de Max : refusé avec tes remarques, il le corrige et le repropose
+    const deny = plan
+      ? note
+        ? `Ton patron veut des changements au plan : ${note}\nCorrige le plan en tenant compte de ses remarques, puis repropose-le avec ExitPlanMode. N'écris pas encore de code.`
+        : 'Ton patron n’a pas validé le plan. Demande-lui ce qu’il veut changer, sans écrire de code.'
+      : note;
+    l.proc.answerPermission(requestId, allow, l.norm.inputOf(requestId), allow ? undefined : deny);
+    // plan validé : Max quitte le mode plan et travaille avec le mode de permission réglé
+    if (plan && allow) l.proc.setPermissionMode(this.workMode());
     l.norm.forgetRequest(requestId);
-    this.record(cur, { k: 'ask_done', requestId, allow });
+    this.record(cur, { k: 'ask_done', requestId, allow, ...(!allow && note ? { message: note.slice(0, 4000) } : {}) });
   }
 
   /** On range la mission (fin de journée) : le bureau est prêt pour la suivante. */

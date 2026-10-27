@@ -6,7 +6,7 @@ import { roleInfo } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { projectModeOf, savePref, teamList, useOffice, type AgentView } from '../state/store.ts';
+import { pendingPlanOf, projectModeOf, savePref, teamList, useOffice, type AgentView } from '../state/store.ts';
 import { ChatSection } from './Chat.tsx';
 import { EXAMPLES, PROJECT_EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
@@ -34,6 +34,9 @@ export function Panel() {
   const final = useOffice((s) => s.final);
   const busy = useOffice((s) => s.busySince !== null);
   const [tab, setTab] = useState(readTab);
+  // un plan de Max à valider : on ramène la conversation, c'est là qu'il se valide
+  const planId = useOffice((s) => pendingPlanOf(s)?.requestId);
+  useEffect(() => { if (planId) setTab('chat'); }, [planId]);
   const pick = (t: 'chat' | 'mission') => { setTab(t); savePref('panelTab', t); };
   return (
     <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>

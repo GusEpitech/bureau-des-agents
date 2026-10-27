@@ -43,7 +43,12 @@ export interface AskView { requestId: string; who: string; tool: string; label: 
 export interface FeedLine { id: number; at: number; who: string; text: string; kind: 'user' | 'chef' | 'hire' | 'act' | 'report' | 'file' | 'ask' | 'end' | 'error' }
 
 /** Un message de la conversation avec Max (ce que tu dis, ce qu'il répond, qui il appelle, ses récaps). */
-export interface ChatMsg { id: number; at: number; kind: 'user' | 'chef' | 'final' | 'note' | 'error'; text: string; ok?: boolean }
+export interface ChatMsg {
+  id: number; at: number; kind: 'user' | 'chef' | 'final' | 'note' | 'error' | 'plan'; text: string; ok?: boolean;
+  /** le plan de Max (kind 'plan') : la demande de permission à laquelle répondre, et ce que tu en as fait */
+  requestId?: string;
+  plan?: 'pending' | 'approved' | 'changes' | 'cancelled';
+}
 
 export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 
@@ -338,6 +343,8 @@ export const useOffice = create<S>((set, get) => ({
       case 'ask': {
         const ask: AskView = { requestId: ev.requestId, who: ev.who, tool: ev.tool, label: ev.label, detail: ev.detail, full: ev.full, at };
         set({ asks: { ...s.asks, [ev.requestId]: ask }, feed: feed(agentName(ev.who), ev.label, 'ask') });
+        // le plan de Max : il s'affiche dans la conversation, avec « Valider » et « Demander des changements »
+        if (ev.tool === 'ExitPlanMode') set({ chat: [...get().chat, { id: ++feedId, at, kind: 'plan', text: ev.detail, requestId: ev.requestId, plan: 'pending' }] });
         if (live) { sfx('ask'); void say('feu-vert', true); }
         break;
       }
@@ -345,6 +352,13 @@ export const useOffice = create<S>((set, get) => ({
         const asks = { ...s.asks };
         delete asks[ev.requestId];
         set({ asks });
+        if (s.chat.some((c) => c.requestId === ev.requestId)) {
+          const state: ChatMsg['plan'] = ev.cancelled ? 'cancelled' : ev.allow ? 'approved' : 'changes';
+          const chat = get().chat.map((c) => (c.requestId === ev.requestId ? { ...c, plan: state } : c));
+          // tes remarques sur le plan restent dans la conversation
+          if (ev.message) chat.push({ id: ++feedId, at, kind: 'user', text: ev.message });
+          set({ chat });
+        }
         break;
       }
       case 'end': {
@@ -385,3 +399,6 @@ export const projectModeOf = (s: S) => (s.mission ? !!s.mission.project : s.conn
 // le dessin du bureau et les noms des métiers suivent le mode
 setProjectMode(projectModeOf(useOffice.getState()));
 useOffice.subscribe((s) => setProjectMode(projectModeOf(s)));
+
+/** Le plan de Max qui attend ta validation (mode projet), s'il y en a un. */
+export const pendingPlanOf = (s: S) => Object.values(s.asks).find((a) => a.tool === 'ExitPlanMode') ?? null;

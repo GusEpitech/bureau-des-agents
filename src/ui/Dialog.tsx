@@ -6,7 +6,7 @@ import { ROLES } from '../../shared/activity.ts';
 import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { projectModeOf, useOffice } from '../state/store.ts';
+import { pendingPlanOf, projectModeOf, useOffice } from '../state/store.ts';
 import { tilde } from './format.ts';
 import { tidy } from './tidy.ts';
 import { dictationHelp, useDictation } from './voice.ts';
@@ -139,7 +139,8 @@ export function Dialog() {
 }
 
 export function AskBar() {
-  const asks = useOffice(useShallow((s) => Object.values(s.asks)));
+  // le plan de Max se valide dans la conversation, pas ici
+  const asks = useOffice(useShallow((s) => Object.values(s.asks).filter((a) => a.tool !== 'ExitPlanMode')));
   const agents = useOffice((s) => s.agents);
   const send = useOffice((s) => s.send);
   const a = asks[0];
@@ -184,8 +185,10 @@ function Composer() {
   const getBase = useCallback(() => textRef.current, []);
   const dict = useDictation(getBase, setText);
 
+  // un plan de Max attend ta validation : ce que tu tapes part comme remarques sur le plan
+  const plan = useOffice(pendingPlanOf);
   const mode: 'new' | 'steer' | 'retouch' = !mission ? 'new' : busy ? 'steer' : 'retouch';
-  const placeholder = mode === 'new'
+  const placeholder = plan ? 'Tes remarques sur le plan de Max… (ou clique « Valider le plan » dans la conversation)' : mode === 'new'
     ? project ? 'Dis à Max quoi faire dans ton projet… (par exemple : corrige le bug du formulaire de connexion)' : 'Dis à Max ce que tu veux… (par exemple : analyse mes 5 concurrents)'
     : mode === 'steer' ? 'Une précision pour Max ? Il la lira entre deux étapes.' : 'Continue la conversation avec Max (il se souvient de tout)… ou lance une nouvelle mission.';
 
@@ -194,7 +197,8 @@ function Composer() {
     if (!t || replaying) return;
     if (dict.listening) dict.stop();
     sfx('send');
-    if (mode === 'new') send({ t: 'start', prompt: t });
+    if (plan) send({ t: 'answer', requestId: plan.requestId, allow: false, message: t });
+    else if (mode === 'new') send({ t: 'start', prompt: t });
     else send({ t: 'say', text: t });
     setText('');
   };

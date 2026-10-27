@@ -663,3 +663,16 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 .chat-msg.live .chat-bubble { border-style: dashed; }
 .chat-note { align-self: center; font-size: 11.5px; color: var(--dim); text-align: center; max-width: 90%; }
 .chat-note.error { color: #ff8a8a; }
+
+/* Le plan de Max à valider (mode projet) */
+.chat-msg.plan { max-width: 100%; align-self: stretch; }
+.chat-msg.plan .chat-bubble { border-color: rgba(var(--accent-rgb), 0.45); }
+.chat-msg.plan.pending .chat-bubble { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1); }
+.chat-msg.plan.cancelled .chat-bubble, .chat-msg.plan.changes .chat-bubble { opacity: 0.7; }
+.chat-who em.plan-state { background: rgba(var(--accent-rgb), 0.15); color: var(--orange2); }
+.chat-who em.plan-state.approved { background: rgba(61, 220, 151, 0.15); color: var(--green); }
+.chat-who em.plan-state.cancelled { background: rgba(255, 255, 255, 0.06); color: var(--dim); }
+.plan-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.plan-edit { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.plan-edit textarea { resize: vertical; border-radius: 10px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); padding: 8px 10px; font: 500 13px/1.4 var(--font); outline: none; }
+.plan-edit textarea:focus { border-color: rgba(var(--accent-rgb), 0.6); }

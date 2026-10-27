@@ -200,7 +200,7 @@ export function SettingsPanel() {
             <label className="radio"><input type="checkbox" checked={voiceOn} onChange={(e) => { useOffice.setState({ voiceOn: e.target.checked }); savePref('voice', e.target.checked); applySound(useOffice.getState().sound); }} /> La voix de Max (« C’est parti ! », « Mission accomplie ! », la visite guidée)</label>
             <label className="radio"><input type="checkbox" checked={cameraAuto} onChange={(e) => { useOffice.setState({ cameraAuto: e.target.checked }); savePref('cameraAuto', e.target.checked); }} /> En mode tournage, la caméra suit l’action toute seule</label>
           </div>
-          <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission (un nouveau dossier, ou celui que tu choisis sous la zone de saisie), et ne lance jamais rien hors du bureau sans te demander.</p>
+          <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission (un nouveau dossier, ou celui que tu choisis sous la zone de saisie), et ne lance jamais rien hors du bureau sans te demander. En mode projet, elle suit ta config Claude Code (tes réglages, tes MCP, tes skills, tes agents), et Max te soumet toujours son plan avant de coder.</p>
           {claude?.found && <p className="small muted">Claude Code {claude.version} · {tilde(dir)}</p>}
           <div className="keys">
             <b>Raccourcis</b>

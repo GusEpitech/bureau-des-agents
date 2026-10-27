@@ -51,6 +51,11 @@ export interface ProcessOptions {
   /** les consignes du chef, ajoutées à celles de Claude Code */
   appendSystemPrompt: string;
   useApiKey: boolean;
+  /**
+   * mode restreint (missions classiques) : seuls les outils listés, ni réglages ni agents personnels.
+   * Faux en mode projet : la séance suit ta config Claude Code (réglages, hooks, MCP, skills, agents, CLAUDE.md).
+   */
+  restricted: boolean;
 }
 
 type Json = Record<string, any>;
@@ -77,11 +82,11 @@ export class ClaudeProcess {
     const o = this.opts;
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
       '--include-partial-messages', '--permission-prompt-tool', 'stdio', '--permission-mode', o.permissionMode,
-      // mode restreint : seuls les outils listés existent, les outils de fichiers restent dans le dossier
-      // de la mission, et ni tes réglages ni tes agents personnels ne s'invitent dans le bureau
-      '--restricted', '--tools', o.tools.join(','),
       '--agents', o.agents,
       '--append-system-prompt', o.appendSystemPrompt];
+    // mode restreint : seuls les outils listés existent, les outils de fichiers restent dans le dossier
+    // de la mission, et ni tes réglages ni tes agents personnels ne s'invitent dans le bureau
+    if (o.restricted) args.push('--restricted', '--tools', o.tools.join(','));
     if (o.model) args.push('--model', o.model);
     if (o.resume) args.push('--resume', o.resume);
     if (o.allowedTools.length) args.push('--allowedTools', o.allowedTools.join(','));
@@ -90,13 +95,14 @@ export class ClaudeProcess {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       BUREAU_DES_AGENTS: '1',
-      // seule l'équipe du bureau peut être appelée (pas les agents génériques de Claude Code)
-      CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS: '1',
       // les membres de l'équipe n'appellent pas eux-mêmes d'autres agents : c'est le rôle du chef
       CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '1',
       // l'équipe travaille au premier plan : le chef attend les rapports, puis assemble le rendu
       CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
     };
+    // mode restreint : seule l'équipe du bureau peut être appelée (pas les agents génériques de Claude Code).
+    // En mode projet, tes agents et ceux de Claude Code restent disponibles (ils s'affichent en « renfort »).
+    if (o.restricted) env.CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS = '1';
     if (!o.useApiKey) { delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; }
     const p = spawn(o.bin, args, { cwd: o.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc = p;
@@ -129,14 +135,19 @@ export class ClaudeProcess {
     return this.write({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } });
   }
 
-  answerPermission(requestId: string, allow: boolean, input: unknown) {
+  answerPermission(requestId: string, allow: boolean, input: unknown, message?: string) {
     this.write({
       type: 'control_response',
       response: {
         subtype: 'success', request_id: requestId,
-        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: 'Le patron a dit non. Trouve une autre façon de faire, ou demande-lui.' },
+        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: message || 'Le patron a dit non. Trouve une autre façon de faire, ou demande-lui.' },
       },
     });
+  }
+
+  /** Change le mode de permission de la séance en cours (plan, auto, acceptEdits…). */
+  setPermissionMode(mode: string) {
+    this.write({ type: 'control_request', request_id: `mode-${Date.now()}`, request: { subtype: 'set_permission_mode', mode } });
   }
 
   /** Une demande de contrôle qu'on ne sait pas traiter : on répond tout de suite pour ne pas le bloquer. */
@@ -175,6 +186,7 @@ export class Normalizer {
   private typing = new Map<string, string>();         // texte en cours d'écriture, par agent
   private typingSentAt = new Map<string, number>();
   private pendingInputs = new Map<string, unknown>(); // demandes de permission → entrée de l'outil
+  private pendingTools = new Map<string, string>();   // demandes de permission → nom de l'outil
   /** les membres de l'équipe présents (appelés, pas encore repartis) */
   readonly present = new Set<string>();
   /** qui a écrit quel fichier en dernier (pour attribuer les fichiers du dossier) */
@@ -199,7 +211,8 @@ export class Normalizer {
   }
 
   inputOf(requestId: string) { return this.pendingInputs.get(requestId); }
-  forgetRequest(requestId: string) { this.pendingInputs.delete(requestId); }
+  toolOf(requestId: string) { return this.pendingTools.get(requestId) ?? ''; }
+  forgetRequest(requestId: string) { this.pendingInputs.delete(requestId); this.pendingTools.delete(requestId); }
   hasRequest(requestId: string) { return this.pendingInputs.has(requestId); }
   pendingRequests() { return [...this.pendingInputs.keys()]; }
 
@@ -231,6 +244,7 @@ export class Normalizer {
         const tool = String(r.tool_name ?? '');
         const input = (r.input ?? {}) as Record<string, unknown>;
         this.pendingInputs.set(m.request_id, input);
+        this.pendingTools.set(m.request_id, tool);
         const who = (r.tool_use_id && this.whoOfTool.get(r.tool_use_id)) || 'chef';
         const { label, detail, full } = permissionText(tool, input, this.folder);
         this.emit({ k: 'ask', who, requestId: m.request_id, tool, label, detail, full });
@@ -240,7 +254,7 @@ export class Normalizer {
         // Claude Code retire sa demande (interruption, fin de tour) : on range la bulle
         const id = String(m.request_id ?? '');
         if (this.pendingInputs.has(id)) {
-          this.pendingInputs.delete(id);
+          this.forgetRequest(id);
           this.emit({ k: 'ask_done', requestId: id, allow: false, cancelled: true });
         }
         break;
