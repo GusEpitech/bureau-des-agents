@@ -800,3 +800,11 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
   .app.dense .stage { display: none; }
   .app.dense .panel { display: flex; border-left: 0; }
 }
+
+/* L'arrêt forcé : quand « Arrêter » n'a pas suffi */
+.btn.stop.force { background: #e5484d; border-color: #e5484d; color: #fff; animation: pulse-red 1.2s infinite; }
+
+/* Le modèle du nom des branches (Réglages) */
+.branch-input { background: var(--surface2); color: var(--ink); border: 1px solid var(--line2); border-radius: 9px; padding: 8px 10px; font: 500 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.branch-input:focus { outline: none; border-color: rgba(var(--accent-rgb), 0.6); }
+.branch-tokens { display: flex; flex-wrap: wrap; gap: 4px 12px; }

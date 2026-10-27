@@ -107,6 +107,8 @@ export interface Settings {
   workdir: string;
   /** les derniers dossiers de travail choisis (tenu par le serveur) */
   recent: string[];
+  /** mode projet : le modèle du nom des branches, avec {titre}, {ticket}, {date}, {heure}, {projet} */
+  branchPattern: string;
 }
 
 export interface Quota { fiveHour: number; resetsAt: number | null }
@@ -152,7 +154,8 @@ export type GitAction = 'status' | 'commit' | 'push' | 'switch_base' | 'delete_b
 export type ClientMsg =
   | { t: 'start'; prompt: string }
   | { t: 'say'; text: string }
-  | { t: 'stop' }
+  /** `force` : coupe Claude Code et ses commandes, même s'il ne répond plus */
+  | { t: 'stop'; force?: boolean }
   /** répondre à une demande de permission ; `message` accompagne un refus (par exemple tes remarques sur le plan de Max) */
   | { t: 'answer'; requestId: string; allow: boolean; message?: string }
   | { t: 'new' }

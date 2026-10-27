@@ -8,6 +8,7 @@ import type {
 import { sfx } from '../audio/sfx.ts';
 import { say } from '../audio/voice.ts';
 import { bus } from './bus.ts';
+import { DEFAULT_BRANCH_PATTERN } from '../../shared/branch.ts';
 import { techLabel } from '../ui/tech.ts';
 
 export interface ActView { id: string; kind: ActKind; label: string; detail: string; at: number; ok?: boolean; tool?: string; raw?: string; out?: string }
@@ -162,7 +163,7 @@ export const useOffice = create<S>((set, get) => ({
   connection: 'connecting',
   claude: null,
   dir: '',
-  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [] },
+  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN },
   quota: null,
   missions: [],
   mission: null,

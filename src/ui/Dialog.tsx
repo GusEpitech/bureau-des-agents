@@ -178,6 +178,20 @@ function Composer() {
   const project = useOffice(projectModeOf);
   const dense = useOffice(denseOf);
   const [text, setText] = useState('');
+  // « Arrêter » sans effet au bout de quelques secondes (Claude Code bloqué) : on propose l'arrêt forcé
+  const [stuck, setStuck] = useState(false);
+  const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (busy) return;
+    setStuck(false);
+    if (stopTimer.current) { clearTimeout(stopTimer.current); stopTimer.current = null; }
+  }, [busy]);
+  useEffect(() => () => { if (stopTimer.current) clearTimeout(stopTimer.current); }, []);
+  const stop = (force: boolean) => {
+    sfx('click');
+    send({ t: 'stop', force });
+    if (!force && !stopTimer.current) stopTimer.current = setTimeout(() => setStuck(true), 4000);
+  };
   const area = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef(text);
   textRef.current = text;
@@ -245,7 +259,9 @@ function Composer() {
         {busy && !replaying ? (
           <>
             {text.trim() && <button className="btn primary send" onClick={submit}>Envoyer</button>}
-            <button className="btn stop" onClick={() => { sfx('click'); send({ t: 'stop' }); }}>■ Arrêter</button>
+            {stuck
+              ? <button className="btn stop force" title="Coupe Claude Code et tout ce qu’il a lancé, même s’il ne répond plus" onClick={() => stop(true)}>⚠ Forcer l’arrêt</button>
+              : <button className="btn stop" title="Maj + clic : arrêt forcé" onClick={(e) => stop(e.shiftKey)}>■ Arrêter</button>}
           </>
         ) : (
           <button className="btn primary send" disabled={!text.trim() || replaying} onClick={submit}>

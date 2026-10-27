@@ -104,7 +104,8 @@ export class ClaudeProcess {
     // En mode projet, tes agents et ceux de Claude Code restent disponibles (ils s'affichent en « renfort »).
     if (o.restricted) env.CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS = '1';
     if (!o.useApiKey) { delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; }
-    const p = spawn(o.bin, args, { cwd: o.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    // son propre groupe de processus : un arrêt forcé emporte aussi les commandes qu'il a lancées
+    const p = spawn(o.bin, args, { cwd: o.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
     this.proc = p;
     readline.createInterface({ input: p.stdout }).on('line', (line) => {
       if (!line.trim()) return;
@@ -168,7 +169,26 @@ export class ClaudeProcess {
 
   /** Arrêt immédiat (quand le pont s'arrête). */
   kill() {
-    if (this.alive) this.proc!.kill('SIGTERM');
+    if (this.alive) this.signal('SIGTERM');
+  }
+
+  /** Arrêt forcé : Claude Code et tout ce qu'il a lancé (commandes, serveurs), même s'il ne répond plus. */
+  forceKill() {
+    const p = this.proc;
+    if (!p || this.exited || p.pid === undefined) return;
+    if (process.platform === 'win32') {
+      execFile('taskkill', ['/pid', String(p.pid), '/T', '/F'], () => {});
+      return;
+    }
+    this.signal('SIGTERM');
+    setTimeout(() => { if (!this.exited) this.signal('SIGKILL'); }, 1500);
+  }
+
+  /** Un signal au groupe de processus (Claude Code et ses commandes), ou au seul processus en repli. */
+  private signal(sig: NodeJS.Signals) {
+    const p = this.proc;
+    if (!p || p.pid === undefined) return;
+    try { process.kill(process.platform === 'win32' ? p.pid : -p.pid, sig); } catch { try { p.kill(sig); } catch { /* déjà parti */ } }
   }
 }
 
