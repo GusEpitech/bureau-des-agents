@@ -35,6 +35,13 @@ export function Panel() {
   const busy = useOffice((s) => s.busySince !== null);
   const [tab, setTab] = useState(readTab);
   const pick = (t: 'chat' | 'mission') => { setTab(t); savePref('panelTab', t); };
+  // Alt+1, Alt+2… (App.tsx) : les onglets dans l'ordre
+  useEffect(() => {
+    const tabs = ['chat', 'mission'] as const;
+    const onTab = (e: Event) => { const t = tabs[(e as CustomEvent<number>).detail]; if (t) pick(t); };
+    window.addEventListener('bureau:tab', onTab);
+    return () => window.removeEventListener('bureau:tab', onTab);
+  }, []);
   return (
     <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
       {mission ? (

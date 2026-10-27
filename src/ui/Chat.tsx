@@ -2,7 +2,7 @@
 // Elle reste là après la mission (et après un redémarrage du bureau) : on la relit, et on la continue.
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useOffice, type ChatMsg } from '../state/store.ts';
-import { mdToHtml } from './md.ts';
+import { copyText, mdToHtml } from './md.ts';
 import { tidy } from './tidy.ts';
 
 const time = (at: number) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -24,6 +24,7 @@ const Message = memo(function Message({ m }: { m: ChatMsg }) {
       <div className="chat-who">
         Max <span>{time(m.at)}</span>
         {m.kind === 'final' && <em className={m.ok === false ? 'ko' : ''}>{m.ok === false ? 'Arrêté' : 'Récap'}</em>}
+        <button type="button" className="chat-copy" title="Copier le message (en markdown)" onClick={(e) => copyText(m.text, e.currentTarget)}>Copier</button>
       </div>
       <div className="chat-bubble md" dangerouslySetInnerHTML={{ __html: html }} />
     </div>

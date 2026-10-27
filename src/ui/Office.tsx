@@ -9,7 +9,7 @@ import { jukebox } from '../audio/music.ts';
 import { interact } from './interact.ts';
 import { H, W } from '../engine/layout.ts';
 import { sfx } from '../audio/sfx.ts';
-import { useOffice, type AskView } from '../state/store.ts';
+import { denseOf, useOffice, type AskView } from '../state/store.ts';
 
 const ICON: Record<ActKind, string> = {
   search: '🔎', web: '🌐', read: '📖', write: '✍️', edit: '✏️', bash: '💻', plan: '📋', skill: '🎓', mcp: '🔌', other: '⚙️',
@@ -105,8 +105,10 @@ export function Office() {
       const dt = (now - last) / 1000;
       last = now;
       if (document.hidden) return;
-      acc += dt;
       const st = useOffice.getState();
+      // vue développeur, bureau replié : on ne dessine rien (le monde reprend où il en était)
+      if (st.officeHidden && denseOf(st)) return;
+      acc += dt;
       // la caméra : le réalisateur filme tout seul en mode tournage (sauf pendant la visite guidée)
       director.enabled = st.filming && st.cameraAuto && !st.tour;
       director.tick();

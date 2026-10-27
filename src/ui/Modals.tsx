@@ -2,7 +2,7 @@
 // les missions précédentes, les réglages, et les petites notifications.
 import { useMemo, useState } from 'react';
 import { sfx } from '../audio/sfx.ts';
-import { savePref, useOffice } from '../state/store.ts';
+import { denseOf, savePref, useOffice } from '../state/store.ts';
 import { applySound } from '../audio/sound.ts';
 import { FileList } from './Panel.tsx';
 import { fmtDate, fmtDuration, plural, tilde } from './format.ts';
@@ -171,6 +171,7 @@ export function SettingsPanel() {
   const dir = useOffice((s) => s.dir);
   const voiceOn = useOffice((s) => s.voiceOn);
   const cameraAuto = useOffice((s) => s.cameraAuto);
+  const dense = useOffice(denseOf);
   if (!open) return null;
   const close = () => useOffice.setState({ settingsOpen: false });
   return (
@@ -196,6 +197,10 @@ export function SettingsPanel() {
             <label className="radio"><input type="radio" checked={settings.permission === 'ask'} onChange={() => send({ t: 'settings', settings: { permission: 'ask' } })} /> Elle demande avant chaque commande</label>
           </div>
           <div className="field">
+            <span>L’affichage</span>
+            <label className="radio"><input type="checkbox" checked={dense} onChange={(e) => { useOffice.setState({ dense: e.target.checked }); savePref('dense', e.target.checked); }} /> Vue développeur : la conversation en grand, le bureau en petit, une interface plus dense (sans son par défaut)</label>
+          </div>
+          <div className="field">
             <span>Le spectacle</span>
             <label className="radio"><input type="checkbox" checked={voiceOn} onChange={(e) => { useOffice.setState({ voiceOn: e.target.checked }); savePref('voice', e.target.checked); applySound(useOffice.getState().sound); }} /> La voix de Max (« C’est parti ! », « Mission accomplie ! », la visite guidée)</label>
             <label className="radio"><input type="checkbox" checked={cameraAuto} onChange={(e) => { useOffice.setState({ cameraAuto: e.target.checked }); savePref('cameraAuto', e.target.checked); }} /> En mode tournage, la caméra suit l’action toute seule</label>
@@ -212,7 +217,11 @@ export function SettingsPanel() {
             <span><kbd>N</kbd> jour, soir, nuit</span>
             <span><kbd>M</kbd> son</span>
             <span><kbd>H</kbd> missions précédentes</span>
-            <span><kbd>Échap</kbd> fermer, sortir du tournage</span>
+            <span><kbd>D</kbd> vue développeur</span>
+            <span><kbd>O</kbd> replier le bureau (vue développeur)</span>
+            <span><kbd>/</kbd> ou <kbd>Ctrl</kbd>+<kbd>K</kbd> écrire à Max</span>
+            <span><kbd>Alt</kbd>+<kbd>1</kbd>, <kbd>2</kbd>… onglets du panneau</span>
+            <span><kbd>Échap</kbd> fermer, sortir du tournage, arrêter l’équipe</span>
             <span>🥚 Il y a un code secret… (pense aux vieux jeux vidéo)</span>
           </div>
         </div>
