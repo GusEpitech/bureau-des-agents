@@ -3,7 +3,7 @@
 // historique, l'équipe et ses outils, la machine, les rendus et l'aperçu des sites créés.
 import { useEffect, useMemo, useState } from 'react';
 import { ROLE_TOOLS, ROLES, roleInfo, TOOL_INFO } from '../../shared/activity.ts';
-import type { PlanItem, Role } from '../../shared/protocol.ts';
+import type { McpServer, PlanItem, Role } from '../../shared/protocol.ts';
 import { jukebox, TRACKS } from '../audio/music.ts';
 import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
@@ -214,7 +214,7 @@ function MachineRoom() {
   const dir = useOffice((s) => s.dir);
   const connection = useOffice((s) => s.connection);
   const rows: [string, React.ReactNode][] = [
-    ['Claude Code', claude?.found ? `${claude.version} · ${claude.path}` : connection === 'demo' ? 'Démo (rediffusion d’une vraie mission)' : 'introuvable'],
+    ['Claude Code', claude?.found ? `${claude.version} · ${tilde(claude.path ?? '')}` : connection === 'demo' ? 'Démo (rediffusion d’une vraie mission)' : 'introuvable'],
     ['Connexion', 'ton abonnement Claude (aucune clé API, aucune facturation à l’usage)'],
     ['Cerveau de Max', mission?.model ? `${mission.model} (réglage : ${settings.chefModel || 'par défaut'})` : settings.chefModel || 'par défaut'],
     ['Cerveau de l’équipe', settings.teamModel === 'inherit' ? 'le même que Max' : settings.teamModel],
@@ -226,6 +226,7 @@ function MachineRoom() {
   return (
     <Shell title="La machine" sub="Ce qui tourne derrière le bureau">
       <dl className="kv">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      {connection === 'live' && claude?.found && <McpSection />}
       <section className="room-sec">
         <h4>Comment ça marche</h4>
         <p className="small">Max est une vraie séance Claude Code, lancée sans fenêtre dans le dossier de la mission. Son équipe, ce sont de vrais sous-agents Claude Code, chacun avec ses consignes et seulement les outils de son métier. Chaque fois qu’un agent utilise un outil (une recherche, une page lue, un fichier écrit), Claude Code le raconte au bureau, qui le montre aussitôt : un robot qui tape, une bulle, un rapport posé sur le bureau du chef.</p>
@@ -234,6 +235,49 @@ function MachineRoom() {
           : <p className="small muted">Mode restreint : l’équipe ne sort jamais du dossier de la mission, et ni tes réglages ni tes autres agents ne s’invitent dans le bureau.</p>}
       </section>
     </Shell>
+  );
+}
+
+const MCP_STATUS: Record<McpServer['status'], string> = { ok: 'connecté', auth: 'à authentifier', pending: 'en attente d’approbation', disabled: 'désactivé', failed: 'en échec' };
+
+/** Les connecteurs MCP : ceux de la séance de Max, ou une vérification à la demande (claude mcp list). */
+function McpSection() {
+  const mcp = useOffice((s) => s.mcp);
+  const loading = useOffice((s) => s.mcpLoading);
+  const send = useOffice((s) => s.send);
+  const check = () => { sfx('click'); useOffice.setState({ mcpLoading: true }); send({ t: 'mcp_list' }); };
+  // pas encore de liste : on vérifie en ouvrant la fenêtre
+  useEffect(() => { if (!useOffice.getState().mcp && !useOffice.getState().mcpLoading) check(); }, []);
+  const servers = mcp ? [...mcp.servers].sort((a, b) => Number(a.status !== 'ok') - Number(b.status !== 'ok') || a.name.localeCompare(b.name)) : [];
+  const ok = servers.filter((x) => x.status === 'ok').length;
+  return (
+    <section className="room-sec">
+      <div className="mcp-head">
+        <h4>Les connecteurs MCP {mcp && !mcp.error && <span className="muted small">{ok}/{servers.length} connectés</span>}</h4>
+        <button className="btn small ghost" disabled={loading} onClick={check}>{loading ? 'Vérification…' : 'Vérifier'}</button>
+      </div>
+      {mcp && (
+        <p className="small muted">
+          {mcp.from === 'session' ? 'Chargés dans la séance de Max' : `Vérifiés dans ${mcp.place ?? 'le bureau'}`}, à {new Date(mcp.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.
+        </p>
+      )}
+      {mcp?.error && <p className="small mcp-error">{tidy(mcp.error)}</p>}
+      {!mcp && loading && <p className="small muted">Je demande à Claude Code ses connecteurs (quelques secondes)…</p>}
+      {mcp && !mcp.error && !servers.length && <p className="small muted">Aucun connecteur MCP. Ajoute-en avec « claude mcp add », ou depuis claude.ai.</p>}
+      {servers.length > 0 && (
+        <ul className="mcp-list">
+          {servers.map((x) => (
+            <li key={`${x.source}:${x.name}`} className={x.status}>
+              <i className="mcp-dot" title={x.label} />
+              <b>{x.name}</b>
+              {x.source === 'claude.ai' && <em className="mcp-tag">claude.ai</em>}
+              <span className="muted">{[x.where, x.tools ? `${x.tools} outil${x.tools > 1 ? 's' : ''}` : '', MCP_STATUS[x.status]].filter(Boolean).join(' · ')}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {servers.some((x) => x.status === 'auth') && <p className="small muted">Un connecteur « à authentifier » se connecte dans Claude Code : lance « claude », puis /mcp.</p>}
+    </section>
   );
 }
 

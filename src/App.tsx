@@ -9,6 +9,7 @@ import { AskBar, Dialog } from './ui/Dialog.tsx';
 import { FinalCard, History, SettingsPanel, Toasts, Viewer } from './ui/Modals.tsx';
 import { Office } from './ui/Office.tsx';
 import { Panel } from './ui/Panel.tsx';
+import { Resizer } from './ui/Resizer.tsx';
 import { Strips } from './ui/Strips.tsx';
 import { party } from './ui/interact.ts';
 import { Rooms } from './ui/Rooms.tsx';
@@ -55,6 +56,7 @@ export function App() {
   const filming = useOffice((s) => s.filming);
   const dense = useOffice(denseOf);
   const officeHidden = useOffice((s) => denseOf(s) && s.officeHidden);
+  const panelW = useOffice((s) => s.panelW);
 
   // vue développeur : son et voix coupés par défaut (tant que tu ne les as pas réglés toi-même)
   useEffect(() => {
@@ -125,7 +127,10 @@ export function App() {
     <div className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''} ${dense ? 'dense' : ''} ${officeHidden ? 'office-hidden' : ''}`}>
       <div className="frame">
         <TopBar />
-        <div className="main">
+        <div
+          className={`main ${panelW && !officeHidden ? 'sized' : ''}`}
+          style={panelW ? ({ '--panel-w': `${panelW}px` } as React.CSSProperties) : undefined}
+        >
           <div className="stage">
             <Office />
             {vertical && <Strips />}
@@ -134,6 +139,7 @@ export function App() {
           </div>
           {/* bureau replié : les demandes de permission et le récap restent visibles, par-dessus la conversation */}
           {officeHidden && <div className="stage-float"><AskBar /><FinalCard /></div>}
+          {!vertical && !filming && !officeHidden && <Resizer />}
           {!vertical && !filming && <Panel />}
         </div>
         <Dialog />

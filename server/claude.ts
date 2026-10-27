@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { describeAct, NAMES, permissionText, roleOfType, ROLES, cut } from '../shared/activity.ts';
-import type { OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
+import type { McpServer, OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
 
 export interface ClaudeBinary { path: string; version: string }
 
@@ -104,7 +104,8 @@ export class ClaudeProcess {
     // En mode projet, tes agents et ceux de Claude Code restent disponibles (ils s'affichent en « renfort »).
     if (o.restricted) env.CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS = '1';
     if (!o.useApiKey) { delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; }
-    const p = spawn(o.bin, args, { cwd: o.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    // son propre groupe de processus : un arrêt forcé emporte aussi les commandes qu'il a lancées
+    const p = spawn(o.bin, args, { cwd: o.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
     this.proc = p;
     readline.createInterface({ input: p.stdout }).on('line', (line) => {
       if (!line.trim()) return;
@@ -168,7 +169,26 @@ export class ClaudeProcess {
 
   /** Arrêt immédiat (quand le pont s'arrête). */
   kill() {
-    if (this.alive) this.proc!.kill('SIGTERM');
+    if (this.alive) this.signal('SIGTERM');
+  }
+
+  /** Arrêt forcé : Claude Code et tout ce qu'il a lancé (commandes, serveurs), même s'il ne répond plus. */
+  forceKill() {
+    const p = this.proc;
+    if (!p || this.exited || p.pid === undefined) return;
+    if (process.platform === 'win32') {
+      execFile('taskkill', ['/pid', String(p.pid), '/T', '/F'], () => {});
+      return;
+    }
+    this.signal('SIGTERM');
+    setTimeout(() => { if (!this.exited) this.signal('SIGKILL'); }, 1500);
+  }
+
+  /** Un signal au groupe de processus (Claude Code et ses commandes), ou au seul processus en repli. */
+  private signal(sig: NodeJS.Signals) {
+    const p = this.proc;
+    if (!p || p.pid === undefined) return;
+    try { process.kill(process.platform === 'win32' ? p.pid : -p.pid, sig); } catch { try { p.kill(sig); } catch { /* déjà parti */ } }
   }
 }
 
@@ -268,7 +288,7 @@ export class Normalizer {
       case 'init':
         this.started = true;
         this.sessionId = String(m.session_id ?? '');
-        this.emit({ k: 'init', model: String(m.model ?? ''), auth: String(m.apiKeySource ?? '') });
+        this.emit({ k: 'init', model: String(m.model ?? ''), auth: String(m.apiKeySource ?? ''), mcp: mcpOfInit(m) });
         break;
       case 'task_started':
         if (m.task_id && m.tool_use_id) this.agentOfTask.set(m.task_id, m.tool_use_id);
@@ -382,4 +402,24 @@ function textOf(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.map((c: Json) => (c?.type === 'text' ? String(c.text ?? '') : '')).join('\n');
   return '';
+}
+
+/** Les connecteurs MCP de la séance, d'après le message « init » : leur état, et combien d'outils chacun apporte. */
+function mcpOfInit(m: Json): McpServer[] | undefined {
+  if (!Array.isArray(m.mcp_servers)) return undefined;
+  const tools: string[] = Array.isArray(m.tools) ? m.tools.map(String) : [];
+  const norm = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '_');
+  return m.mcp_servers.slice(0, 60).map((x: Json): McpServer => {
+    const raw = String(x?.name ?? '');
+    const cloud = raw.startsWith('claude.ai ');
+    const st = String(x?.status ?? '').toLowerCase();
+    const prefix = `mcp__${norm(raw)}__`;
+    return {
+      name: cloud ? raw.slice('claude.ai '.length) : raw,
+      source: cloud ? 'claude.ai' : 'local',
+      status: st === 'connected' ? 'ok' : st.includes('auth') ? 'auth' : st === 'pending' ? 'pending' : st === 'disabled' ? 'disabled' : 'failed',
+      label: String(x?.status ?? ''),
+      tools: tools.filter((t) => t.startsWith(prefix)).length,
+    };
+  });
 }

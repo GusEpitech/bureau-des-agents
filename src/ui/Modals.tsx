@@ -1,6 +1,7 @@
 // Les fenêtres par-dessus le bureau : la carte du rendu final, la lecture d'un fichier,
 // les missions précédentes, les réglages, et les petites notifications.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { BRANCH_TOKENS, branchName, DEFAULT_BRANCH_PATTERN } from '../../shared/branch.ts';
 import { sfx } from '../audio/sfx.ts';
 import { denseOf, savePref, techOf, useOffice } from '../state/store.ts';
 import { applySound } from '../audio/sound.ts';
@@ -42,7 +43,7 @@ export function FinalCard() {
       {files > 0 && <FileList />}
       {!replaying && (
         <div className="final-actions">
-          <button className="btn" onClick={() => send({ t: 'open', missionId: mission.id })}>Ouvrir le dossier</button>
+          <button className="btn" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir dans l’éditeur' : 'Ouvrir le dossier'}</button>
           <button className="btn" onClick={() => { close(); useOffice.setState({ draft: ' ' }); }}>Continuer la conversation</button>
           <button className="btn primary" onClick={() => { sfx('click'); close(); send({ t: 'new' }); }}>Nouvelle mission</button>
         </div>
@@ -192,6 +193,7 @@ export function SettingsPanel() {
               {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </label>
+          <BranchField />
           <div className="field">
             <span>Les permissions</span>
             <label className="radio"><input type="radio" checked={settings.permission === 'auto'} onChange={() => send({ t: 'settings', settings: { permission: 'auto' } })} /> L’équipe décide seule, et lève la main pour les gestes risqués</label>
@@ -239,5 +241,31 @@ export function Toasts() {
     <div className="toasts">
       {toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}
     </div>
+  );
+}
+
+/** Mode projet : le modèle du nom des branches, avec un aperçu (enregistré quand on quitte le champ). */
+function BranchField() {
+  const saved = useOffice((s) => s.settings.branchPattern);
+  const send = useOffice((s) => s.send);
+  const [value, setValue] = useState(saved);
+  useEffect(() => setValue(saved), [saved]);
+  const save = () => { if (value.trim() !== saved) send({ t: 'settings', settings: { branchPattern: value.trim() || DEFAULT_BRANCH_PATTERN } }); };
+  const preview = branchName(value, { title: 'Choisir qui accède à quel cours', prompt: 'Implémente le ticket SCRUM-17', project: 'corelab', now: new Date() });
+  return (
+    <label className="field">
+      <span>Le nom des branches (mode projet)</span>
+      <input
+        className="branch-input"
+        value={value}
+        spellCheck={false}
+        placeholder={DEFAULT_BRANCH_PATTERN}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); (e.target as HTMLInputElement).blur(); } }}
+      />
+      <small className="muted">Exemple : <code>{preview}</code></small>
+      <small className="muted branch-tokens">{BRANCH_TOKENS.map(([t, d]) => <span key={t}><code>{t}</code> {d}</span>)}</small>
+    </label>
   );
 }

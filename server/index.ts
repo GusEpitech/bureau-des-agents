@@ -144,7 +144,7 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
       bureau.say(str(m.text));
       break;
     case 'stop':
-      bureau.stop();
+      bureau.stop(m.force === true);
       break;
     case 'answer':
       bureau.answer(str(m.requestId, 100), m.allow === true, m.message ? str(m.message, 4000) : undefined);
@@ -180,6 +180,9 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
     }
     case 'settings':
       bureau.setSettings(m.settings ?? {});
+      break;
+    case 'mcp_list':
+      send(await bureau.mcpList());
       break;
     case 'resume':
       await bureau.resume(str(m.missionId, 40));

@@ -5,12 +5,14 @@
 // Une mission = une séance Claude Code lancée dans le dossier de la mission. On peut lui reparler
 // une fois finie (retouches) : la même séance reprend.
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats } from '../shared/activity.ts';
+import { branchName, DEFAULT_BRANCH_PATTERN } from '../shared/branch.ts';
 import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
+import { mcpList } from './mcp.ts';
 import { ClaudeProcess, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
 import * as gitOps from './git.ts';
 import { agentsJson, ALWAYS_ALLOWED, chefPrompt, SESSION_TOOLS } from './team.ts';
@@ -42,7 +44,7 @@ Le dossier caché « .bureau » garde l'état du bureau et l'enregistrement de c
 Tu peux le supprimer pour tout recommencer.
 `;
 
-const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [] };
+const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN };
 const CHEF_MODELS = ['', 'sonnet', 'opus', 'haiku', 'fable'];
 const TEAM_MODELS = ['sonnet', 'haiku', 'opus', 'fable', 'inherit'];
 const IDLE_STOP_MS = 15 * 60 * 1000;
@@ -177,6 +179,7 @@ export class Bureau {
       workdir,
       // le dernier dossier choisi passe en tête de la liste (le navigateur ne peut pas la modifier)
       recent: workdir ? [workdir, ...cur.recent.filter((d) => d !== workdir)].slice(0, MAX_RECENT) : cur.recent,
+      branchPattern: typeof p.branchPattern === 'string' ? p.branchPattern.trim().slice(0, 100) || DEFAULT_BRANCH_PATTERN : cur.branchPattern,
     };
     this.save();
     this.broadcast({ t: 'settings', settings: this.state.settings });
@@ -229,6 +232,24 @@ export class Bureau {
     }
   }
 
+  private mcpChecking: Promise<ServerMsg> | null = null;
+
+  /** Les connecteurs MCP, vérifiés là où l'équipe travaille (la mission ouverte, sinon le projet choisi, sinon le bureau). */
+  mcpList(): Promise<ServerMsg> {
+    if (this.mcpChecking) return this.mcpChecking; // une seule vérification à la fois (elle prend quelques secondes)
+    const cwd = this.current?.mission.folder ?? (this.settings.workdir || this.dir);
+    const place = this.current?.mission.project ?? (this.settings.workdir ? path.basename(this.settings.workdir) : 'le bureau');
+    const at = Date.now();
+    const run = async (): Promise<ServerMsg> => {
+      if (!this.claude) return { t: 'mcp_list', servers: [], place, at, error: 'Claude Code n’est pas installé sur cet ordinateur.' };
+      try { return { t: 'mcp_list', servers: await mcpList(this.claude.path, cwd), place, at }; } catch (e) {
+        return { t: 'mcp_list', servers: [], place, at, error: e instanceof Error ? e.message : String(e) };
+      }
+    };
+    this.mcpChecking = run().finally(() => { this.mcpChecking = null; });
+    return this.mcpChecking;
+  }
+
   /** Vrai si la mission travaille dans un dossier choisi par l'utilisateur (et pas dans « Missions »). */
   private ownFolder(m: MissionInfo) { return !m.folder.startsWith(this.missionsDir + path.sep); }
 
@@ -267,7 +288,7 @@ export class Bureau {
       await mkdir(folder, { recursive: true });
     }
     const project = this.settings.workdir ? path.basename(folder) : undefined;
-    const git = project ? this.gitBranch(folder, `${stamp} ${title}`) : null;
+    const git = project ? this.gitBranch(folder, branchName(this.settings.branchPattern, { title, prompt: text, project, now })) : null;
 
     const mission: MissionInfo = {
       id: 'm' + Date.now().toString(36), title, prompt: text, folder, createdAt: Date.now(), workMs: 0,
@@ -292,7 +313,7 @@ export class Bureau {
    * Refuse si le dépôt a des changements pas commités (ils se mélangeraient à ceux de l'équipe).
    * Un dossier qui n'est pas un dépôt git : pas de branche.
    */
-  private gitBranch(folder: string, label: string): { branch: string; base: string } | null {
+  private gitBranch(folder: string, wanted: string): { branch: string; base: string } | null {
     const git = (...args: string[]) => execFileSync('git', ['-C', folder, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     try {
       if (git('rev-parse', '--is-inside-work-tree') !== 'true') return null;
@@ -302,9 +323,12 @@ export class Bureau {
     }
     let base = '';
     try { base = git('symbolic-ref', '--short', 'HEAD'); } catch { base = git('rev-parse', '--short', 'HEAD'); }
-    const slug = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).replace(/-+$/, '');
-    let branch = `bureau/${slug || 'mission'}`;
-    for (let n = 2; this.gitHas(git, branch); n++) branch = `bureau/${slug || 'mission'}-${n}`;
+    // le nom tiré du modèle des réglages ; git a le dernier mot sur ce qui est un nom valide
+    try { git('check-ref-format', '--branch', wanted); } catch {
+      throw new Error(`« ${wanted} » n’est pas un nom de branche valide pour git : change le modèle dans les réglages.`);
+    }
+    let branch = wanted;
+    for (let n = 2; this.gitHas(git, branch); n++) branch = `${wanted}-${n}`;
     try { git('switch', '-c', branch); } catch {
       try { git('checkout', '-b', branch); } catch (e) {
         throw new Error(`Je n’arrive pas à créer la branche ${branch} : ${e instanceof Error ? e.message.split('\n').pop() : e}`);
@@ -578,11 +602,23 @@ export class Bureau {
   }
 
   // ── Les commandes du bureau ──
-  stop() {
+  /** Arrêter l'équipe. Sans `force`, Claude Code s'interrompt proprement ; avec, on coupe tout, même s'il ne répond plus. */
+  stop(force = false) {
     const cur = this.current;
-    if (!cur || cur.mission.status !== 'working') return;
+    if (!cur) return;
+    // déjà arrêtée ici, mais le navigateur la croit au travail (fin jamais enregistrée) : on remet les choses d'aplomb
+    if (cur.mission.status !== 'working') { this.ensureEnded(cur); return; }
     cur.stopAsked = true;
-    if (cur.live?.proc.alive) cur.live.proc.interrupt();
+    const l = cur.live;
+    if (force && l) {
+      l.stopping = true;
+      this.record(cur, { k: 'error', message: 'Arrêt forcé : j’ai coupé Claude Code et tout ce qu’il avait lancé.' });
+      this.finish(cur, false, cur.lastChefText, 0, true);
+      cur.live = null; // le processus qui meurt ne parle plus à la mission
+      l.proc.forceKill();
+      return;
+    }
+    if (l?.proc.alive) l.proc.interrupt();
     else this.finish(cur, false, cur.lastChefText, 0, true);
   }
 
@@ -700,7 +736,29 @@ export class Bureau {
     };
     this.current = cur;
     this.watch(cur);
+    if (m.status !== 'working') this.ensureEnded(cur);
     return cur;
+  }
+
+  /**
+   * Un tour commencé sans fin enregistrée (le bureau a été coupé pendant que l'équipe travaillait) : on enregistre
+   * sa fin, sinon le navigateur croirait l'équipe toujours au travail, sans moyen de l'arrêter.
+   */
+  private ensureEnded(cur: Current) {
+    let open = false;
+    for (const { ev } of cur.log) {
+      if (ev.k === 'start') open = true;
+      else if (ev.k === 'end') open = false;
+    }
+    if (!open) return;
+    const present = new Set<string>();
+    for (const { ev } of cur.log) {
+      if (ev.k === 'hire') present.add(ev.id);
+      else if (ev.k === 'leave') present.delete(ev.who);
+    }
+    for (const id of present) this.record(cur, { k: 'leave', who: id, ok: false, tokens: 0, tools: 0, ms: 0 });
+    this.record(cur, { k: 'error', message: 'Le bureau a été coupé pendant que l’équipe travaillait : la mission s’est arrêtée là. Tu peux reprendre la conversation.' });
+    this.record(cur, { k: 'end', ok: false, text: cur.lastChefText, ms: 0, stopped: true });
   }
 
   /** Le chemin d'un fichier de la mission (refusé s'il sort du dossier). */
@@ -713,11 +771,23 @@ export class Bureau {
     return { m, target };
   }
 
-  /** Ouvre le dossier de la mission (ou un de ses fichiers) avec l'appli par défaut. */
+  /**
+   * Ouvre le dossier de la mission (ou un de ses fichiers) avec l'appli par défaut.
+   * En mode projet, c'est l'éditeur de code qui l'ouvre (VS Code, ou celui de BUREAU_EDITOR : cursor, codium…),
+   * avec le fichier dans la fenêtre du projet ; sans éditeur trouvé, on revient à l'appli par défaut.
+   */
   open(missionId: string, file?: string) {
-    const { target } = this.inside(missionId, file);
+    const { m, target } = this.inside(missionId, file);
     const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
-    execFile(opener, [target], () => {});
+    const fallback = () => execFile(opener, [target], () => {});
+    if (!this.ownFolder(m)) { fallback(); return; }
+    const editor = process.env.BUREAU_EDITOR || 'code';
+    const win = process.platform === 'win32';
+    // sous Windows, « code » est un script .cmd : il faut passer par le shell, avec les chemins entre guillemets
+    const args = (file ? [m.folder, '--goto', target] : [m.folder]).map((a) => (win ? `"${a}"` : a));
+    execFile(editor, args, { shell: win }, (err) => {
+      if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') fallback();
+    });
   }
 
   /** Ouvre le dossier du bureau, ou son règlement (dans l'éditeur de texte par défaut). */
@@ -775,7 +845,13 @@ export class Bureau {
   shutdown() {
     const cur = this.current;
     if (cur) {
-      if (cur.mission.status === 'working') { cur.mission.status = 'stopped'; cur.mission.endedAt = Date.now(); if (cur.busySince) cur.mission.workMs += Date.now() - cur.busySince; }
+      if (cur.mission.status === 'working') {
+        cur.mission.status = 'stopped'; cur.mission.endedAt = Date.now(); if (cur.busySince) cur.mission.workMs += Date.now() - cur.busySince;
+        // la fin du tour s'écrit tout de suite (le bureau s'arrête) : rouverte, la mission ne paraîtra pas encore au travail
+        const at = Date.now();
+        const end: OfficeEvent = { k: 'end', ok: false, text: cur.lastChefText, ms: 0, stopped: true };
+        try { appendFileSync(path.join(this.recDir, `${cur.mission.id}.jsonl`), JSON.stringify({ at, ev: end }) + '\n'); } catch { /* tant pis */ }
+      }
       cur.watcher?.close();
       if (cur.live) { cur.live.stopping = true; cur.live.proc.kill(); }
     }
