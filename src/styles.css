@@ -663,3 +663,48 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 .chat-msg.live .chat-bubble { border-style: dashed; }
 .chat-note { align-self: center; font-size: 11.5px; color: var(--dim); text-align: center; max-width: 90%; }
 .chat-note.error { color: #ff8a8a; }
+
+/* Mode projet : l'onglet « Diff » et les actions git */
+.panel-tabs .seg button { padding-inline: 6px; white-space: nowrap; font-size: 12.5px; }
+.diff-card { display: flex; flex-direction: column; gap: 8px; }
+.diff-card .warn, .git-bar .warn { color: var(--orange2); }
+.diff-card .grow { flex: 1; }
+.git-bar { display: flex; flex-direction: column; gap: 7px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.git-state { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.git-state code, .git-result code { font: 11.5px ui-monospace, monospace; background: var(--surface3); padding: 1px 5px; border-radius: 4px; }
+.git-commit { display: flex; gap: 6px; align-items: stretch; }
+.git-commit textarea { flex: 1; min-width: 0; resize: vertical; border-radius: 8px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); padding: 6px 8px; font: 12px/1.4 ui-monospace, monospace; outline: none; }
+.git-commit textarea:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+.git-actions { flex-wrap: wrap; }
+.btn.danger { background: rgba(255, 93, 93, 0.15); border-color: rgba(255, 93, 93, 0.55); color: #ff9d9d; }
+.git-result { margin: 0; overflow-wrap: anywhere; }
+.git-result.ok { color: var(--green); }
+.git-result.ko { color: #ff8a8a; }
+.git-result a { color: var(--orange2); }
+.diff-head { display: flex; align-items: center; gap: 8px; }
+.diff-count { font: 600 11.5px ui-monospace, monospace; white-space: nowrap; }
+.diff-count i { font-style: normal; }
+.diff-count .plus { color: var(--green); }
+.diff-count .minus { color: #ff7b7b; }
+.diff-files { display: flex; flex-direction: column; gap: 4px; }
+.diff-file { border: 1px solid var(--line); border-radius: 8px; background: var(--surface2); overflow: hidden; }
+.diff-file-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; background: transparent; color: var(--ink); text-align: left; font-size: 12.5px; }
+.diff-file-head:hover { background: var(--surface3); }
+.diff-st { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; font: 700 11px ui-monospace, monospace; }
+.diff-st.added { background: rgba(61, 220, 151, 0.18); color: var(--green); }
+.diff-st.modified { background: rgba(255, 201, 61, 0.16); color: #ffc93d; }
+.diff-st.deleted { background: rgba(255, 93, 93, 0.16); color: #ff7b7b; }
+.diff-st.renamed { background: rgba(79, 179, 255, 0.16); color: #4fb3ff; }
+.diff-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, monospace; }
+.diff-chev { flex: none; color: var(--dim); }
+.diff-patch { margin: 0; max-height: 460px; overflow: auto; background: #08080b; border-top: 1px solid var(--line); font: 11.5px/1.45 ui-monospace, monospace; }
+.diff-patch .dl { display: block; padding: 0 8px; white-space: pre; min-width: max-content; }
+.diff-patch .add { background: rgba(61, 220, 151, 0.12); color: #b5f5d5; }
+.diff-patch .del { background: rgba(255, 93, 93, 0.12); color: #ffc2c2; }
+.diff-patch .hunk { background: rgba(79, 179, 255, 0.1); color: #8fcbff; }
+.diff-patch .meta { color: var(--dim); font-style: italic; }
+.diff-patch .ctx { color: #b9b9c2; }
+.diff-empty { margin: 0; padding: 8px; border-top: 1px solid var(--line); }
+.diff-back { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; padding: 16px; }
+.diff-card.big { width: min(1200px, 96vw); height: min(880px, 92vh); overflow-y: auto; }
+.diff-card.big .diff-patch { max-height: none; }

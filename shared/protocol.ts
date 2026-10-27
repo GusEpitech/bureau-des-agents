@@ -105,6 +105,43 @@ export interface Settings {
 
 export interface Quota { fiveHour: number; resetsAt: number | null }
 
+/** Mode projet : un fichier du diff de la mission (l'arbre de travail comparé à la branche de départ). */
+export interface DiffFile {
+  path: string;
+  /** l'ancien nom, pour un fichier renommé */
+  oldPath?: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  additions: number;
+  deletions: number;
+  /** les morceaux du diff (lignes « @@ », « + », « - », « espace ») */
+  patch: string;
+  binary: boolean;
+  /** le patch a été coupé (trop gros) */
+  truncated: boolean;
+}
+
+/** Mode projet : où en est le dépôt de la mission. */
+export interface GitStatus {
+  /** la branche actuelle du dossier (null : HEAD détachée) */
+  branch: string | null;
+  missionBranch?: string;
+  base?: string;
+  /** le dossier est sur la branche de la mission */
+  onMission: boolean;
+  /** la branche de la mission existe encore */
+  branchExists: boolean;
+  /** des changements pas encore commités */
+  dirty: boolean;
+  /** les commits de la branche de la mission qui ne sont pas sur la base */
+  ahead: number;
+  /** un remote « origin » existe */
+  remote: boolean;
+  /** la commande gh (GitHub) est installée */
+  gh: boolean;
+}
+
+export type GitAction = 'status' | 'commit' | 'push' | 'switch_base' | 'delete_branch';
+
 // ── Navigateur → serveur ──
 export type ClientMsg =
   | { t: 'start'; prompt: string }
@@ -123,7 +160,11 @@ export type ClientMsg =
   /** ouvre la fenêtre de choix de dossier de l'ordinateur, pour choisir le dossier de travail */
   | { t: 'pick_folder' }
   /** rouvre une mission passée : sa conversation, son récap, ses fichiers ; on peut ensuite continuer à parler à Max */
-  | { t: 'resume'; missionId: string };
+  | { t: 'resume'; missionId: string }
+  /** mode projet : le diff de la mission */
+  | { t: 'diff'; missionId: string }
+  /** mode projet : une action git sur la branche de la mission */
+  | { t: 'git'; missionId: string; action: GitAction; message?: string };
 
 // ── Serveur → navigateur ──
 export type ServerMsg =
@@ -139,4 +180,8 @@ export type ServerMsg =
   | { t: 'team_history'; entries: TeamEntry[] }
   | { t: 'quota'; quota: Quota }
   | { t: 'settings'; settings: Settings }
-  | { t: 'toast'; kind: 'info' | 'error'; text: string };
+  | { t: 'toast'; kind: 'info' | 'error'; text: string }
+  /** mode projet : le diff (ok faux : text explique pourquoi il n'y en a pas) */
+  | { t: 'diff'; missionId: string; ok: boolean; text?: string; note?: string; files: DiffFile[]; truncated: boolean }
+  | { t: 'git_status'; missionId: string; status: GitStatus | null; text?: string }
+  | { t: 'git_done'; missionId: string; action: GitAction; ok: boolean; text: string; url?: string };

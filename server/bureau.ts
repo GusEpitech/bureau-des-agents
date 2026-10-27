@@ -10,8 +10,9 @@ import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, w
 import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats } from '../shared/activity.ts';
-import type { ClaudeInfo, FileInfo, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
+import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
 import { ClaudeProcess, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
+import * as gitOps from './git.ts';
 import { agentsJson, ALWAYS_ALLOWED, chefPrompt, SESSION_TOOLS } from './team.ts';
 
 const RULES_FILE = 'Règlement du bureau.md';
@@ -585,6 +586,45 @@ export class Bureau {
     this.state.currentId = undefined;
     this.broadcast({ t: 'closed', missionId: cur.mission.id });
     this.save();
+  }
+
+  // ── Mode projet : le diff et les actions git (voir git.ts) ──
+  private gitBusy = false;
+
+  /** Une mission en mode projet, sinon une erreur claire. */
+  private projectMission(missionId: string) {
+    const m = this.mission(missionId);
+    if (!m) throw new Error('Cette mission n’existe plus.');
+    if (!m.project) throw new Error('Les actions git n’existent qu’en mode projet.');
+    if (!existsSync(m.folder)) throw new Error('Le dossier de cette mission n’existe plus.');
+    return m;
+  }
+
+  async diff(missionId: string) {
+    return gitOps.diff(this.projectMission(missionId));
+  }
+
+  async gitStatus(missionId: string) {
+    return gitOps.status(this.projectMission(missionId));
+  }
+
+  /** Une action git sur la branche de la mission (jamais pendant que l'équipe y travaille). */
+  async gitAction(missionId: string, action: Exclude<GitAction, 'status'>, message: string): Promise<gitOps.ActionResult> {
+    const m = this.projectMission(missionId);
+    const working = this.current?.mission.status === 'working' && this.current.mission.folder === m.folder;
+    if (working) return { ok: false, text: 'L’équipe travaille encore dans ce projet : attends qu’elle ait fini (ou arrête-la).' };
+    if (this.gitBusy) return { ok: false, text: 'Une action git est déjà en cours.' };
+    this.gitBusy = true;
+    try {
+      switch (action) {
+        case 'commit': return await gitOps.commit(m, message);
+        case 'push': return await gitOps.push(m);
+        case 'switch_base': return await gitOps.switchBase(m);
+        case 'delete_branch': return await gitOps.deleteBranch(m);
+      }
+    } finally {
+      this.gitBusy = false;
+    }
   }
 
   /**
