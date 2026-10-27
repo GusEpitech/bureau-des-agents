@@ -220,6 +220,7 @@ function MachineRoom() {
     ['Cerveau de l’équipe', settings.teamModel === 'inherit' ? 'le même que Max' : settings.teamModel],
     ['Permissions', settings.permission === 'auto' ? 'automatiques : l’agent lève la main pour les gestes risqués' : 'demandées avant chaque commande'],
     ['Énergie (5 h)', quota ? `${Math.round(quota.fiveHour * 100)} % utilisés${quota.resetsAt ? `, rechargée à ${new Date(quota.resetsAt * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : ''}` : 'pas encore mesurée'],
+    ...(quota?.sevenDay !== undefined ? [['Énergie (7 jours)', `${Math.round(quota.sevenDay * 100)} % utilisés`] as [string, string]] : []),
     ['Dossier du bureau', dir ? tilde(dir) : '—'],
     ['Mission en cours', mission ? tilde(mission.folder) : 'aucune'],
   ];
@@ -365,7 +366,7 @@ function TeamRoom({ role }: { role?: Role }) {
         <div className="roles">
           {roles.map((r) => (
             <div key={r} className={`role-card ${role === r ? 'focus' : ''}`} style={{ ['--c' as string]: ROLES[r].color }}>
-              <div className="role-head"><Avatar role={r} size={34} /><div><b>{roleInfo(r).icon} {roleInfo(r).label}</b><span>{r === 'chef' ? 'Max' : `agent « ${roleInfo(r).type} »`} · cerveau : {r === 'chef' ? settings.chefModel || 'par défaut' : settings.teamModel === 'inherit' ? 'comme Max' : settings.teamModel}</span></div>{working(r) > 0 && <em>{working(r)} au travail</em>}</div>
+              <div className="role-head"><Avatar role={r} size={34} /><div><b>{roleInfo(r).icon} {roleInfo(r).label}</b><span>{r === 'chef' ? 'Max' : `agent « ${roleInfo(r).type} »`} · cerveau : {r === 'chef' ? settings.chefModel || 'par défaut' : (settings.roleModels[r] ?? settings.teamModel) === 'inherit' ? 'comme Max' : settings.roleModels[r] ?? settings.teamModel}</span></div>{working(r) > 0 && <em>{working(r)} au travail</em>}</div>
               <p>{roleInfo(r).what}</p>
               <div className="tools">{ROLE_TOOLS[r].map((t) => <span key={t} title={TOOL_INFO[t] ?? t}>{t}<small>{TOOL_INFO[t] ?? ''}</small></span>)}</div>
             </div>

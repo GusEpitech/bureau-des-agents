@@ -254,8 +254,8 @@ export class Normalizer {
         this.onResult({ ok: !m.is_error && m.subtype === 'success', text: String(m.result ?? ''), ms: Number(m.duration_ms ?? 0), subtype: String(m.subtype ?? ''), usage: usageOf(m) });
         break;
       case 'rate_limit_event': {
-        const w = m.rate_limit_info?.unifiedWindows ?? {};
-        if (w.five_hour) this.onQuota({ fiveHour: Number(w.five_hour.utilization ?? 0), resetsAt: Number(w.five_hour.resetsAt ?? 0) || null });
+        const q = quotaOf(m.rate_limit_info);
+        if (q) this.onQuota(q);
         break;
       }
       case 'control_request': {
@@ -421,5 +421,44 @@ function mcpOfInit(m: Json): McpServer[] | undefined {
       label: String(x?.status ?? ''),
       tools: tools.filter((t) => t.startsWith(prefix)).length,
     };
+  });
+}
+
+/**
+ * Le quota, d'après un message « rate_limit_event » (ou null s'il n'en dit rien). Claude Code donne les fenêtres de 5 heures
+ * et de 7 jours dans `unifiedWindows` ; on lit aussi l'ancienne forme (une seule fenêtre : `rateLimitType` + `utilization`).
+ */
+export function quotaOf(info: Json | undefined): Quota | null {
+  if (!info || typeof info !== 'object') return null;
+  const win = (w: Json | undefined) => (w && typeof w.utilization === 'number' ? { u: Math.max(0, Math.min(1, w.utilization)), at: Number(w.resetsAt ?? 0) || null } : null);
+  const u = (info.unifiedWindows ?? {}) as Json;
+  let five = win(u.five_hour);
+  let seven = win(u.seven_day);
+  if (!five && info.rateLimitType === 'five_hour') five = win(info as Json);
+  if (!seven && info.rateLimitType === 'seven_day') seven = win(info as Json);
+  if (!five && !seven) return null;
+  return { fiveHour: five?.u ?? 0, resetsAt: five?.at ?? null, sevenDay: seven?.u, sevenDayResetsAt: seven?.at ?? null, at: Date.now() };
+}
+
+/** Un quota dont la fenêtre est déjà rechargée : la part utilisée est repartie de zéro. */
+export function freshQuota(q: Quota, now = Date.now()): Quota {
+  const five = q.resetsAt !== null && q.resetsAt * 1000 < now;
+  const seven = q.sevenDayResetsAt != null && q.sevenDayResetsAt * 1000 < now;
+  return { ...q, fiveHour: five ? 0 : q.fiveHour, sevenDay: seven ? 0 : q.sevenDay };
+}
+
+/** Mesure le quota : un tout petit appel à Haiku, sans outils ni connecteurs (3 secondes, une fraction de pourcent). */
+export function measureQuota(bin: string, cwd: string): Promise<Quota | null> {
+  return new Promise((resolve) => {
+    execFile(bin, ['-p', 'ok', '--output-format', 'stream-json', '--verbose', '--model', 'haiku', '--no-session-persistence', '--restricted', '--tools', ''],
+      { cwd, timeout: 60_000, encoding: 'utf8', maxBuffer: 4_000_000, env: { ...process.env, BUREAU_DES_AGENTS: '1' } },
+      (_err, stdout) => {
+        let q: Quota | null = null;
+        for (const line of String(stdout).split('\n')) {
+          if (!line.includes('rate_limit_event')) continue;
+          try { const m = JSON.parse(line); if (m.type === 'rate_limit_event') q = quotaOf(m.rate_limit_info) ?? q; } catch { /* ligne coupée */ }
+        }
+        resolve(q);
+      });
   });
 }

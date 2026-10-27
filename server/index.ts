@@ -181,6 +181,9 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
     case 'settings':
       bureau.setSettings(m.settings ?? {});
       break;
+    case 'quota_refresh':
+      await bureau.refreshQuota();
+      break;
     case 'mcp_list':
       send(await bureau.mcpList());
       break;

@@ -39,6 +39,15 @@ export function TopBar() {
   const quota = useOffice((s) => s.quota);
   const replaying = useOffice((s) => s.replaying);
   const connection = useOffice((s) => s.connection);
+  const send = useOffice((s) => s.send);
+  // « mesure en cours » : jusqu'à l'arrivée du nouveau quota (ou 15 s au plus)
+  const [measuring, setMeasuring] = useState(false);
+  useEffect(() => {
+    if (!measuring) return;
+    const t = setTimeout(() => setMeasuring(false), 15000);
+    return () => clearTimeout(t);
+  }, [measuring]);
+  useEffect(() => setMeasuring(false), [quota?.at, quota?.fiveHour]);
   // le nom du projet (mode projet) : celui de la mission, ou celui choisi pour la prochaine
   const projectName = useOffice((s) => (projectModeOf(s) ? s.mission?.project ?? s.settings.workdir.split('/').filter(Boolean).pop() ?? '' : ''));
   const final = useOffice((s) => s.final);
@@ -105,11 +114,20 @@ export function TopBar() {
       )}
 
       <div className="tools">
-        {quota && (
-          <span className="energy" title={`Ton abonnement sur 5 heures : ${Math.round(quota.fiveHour * 100)} % utilisés`}>
+        {connection === 'live' && (
+          <button
+            className={`energy ${quota ? (quota.fiveHour >= 0.85 ? 'low' : quota.fiveHour >= 0.6 ? 'mid' : '') : 'unknown'} ${measuring ? 'measuring' : ''}`}
+            title={quota
+              ? `Ton abonnement sur 5 heures : ${Math.round(quota.fiveHour * 100)} % utilisés, ${Math.round((1 - quota.fiveHour) * 100)} % restants`
+                + `${quota.sevenDay !== undefined ? ` · sur 7 jours : ${Math.round(quota.sevenDay * 100)} % utilisés` : ''}`
+                + `${quota.at ? ` · mesuré à ${new Date(quota.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : ''}. Clique pour mesurer maintenant.`
+              : 'Énergie pas encore mesurée. Clique pour la mesurer.'}
+            onClick={() => { sfx('click'); setMeasuring(true); send({ t: 'quota_refresh' }); }}
+          >
             <span className="energy-label">Énergie</span>
-            <span className="energy-bar"><i style={{ width: `${Math.max(3, 100 - quota.fiveHour * 100)}%` }} /></span>
-          </span>
+            <span className="energy-bar"><i style={{ width: `${quota ? Math.max(3, 100 - quota.fiveHour * 100) : 0}%` }} /></span>
+            {quota && <span className="energy-pct">{Math.round((1 - quota.fiveHour) * 100)} %</span>}
+          </button>
         )}
         {dense && (
           <button className={`icon-btn ${officeHidden ? 'on' : ''}`} title={officeHidden ? 'Déplier le bureau animé (O)' : 'Replier le bureau animé : la conversation prend toute la place (O)'}

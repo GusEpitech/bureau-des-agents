@@ -1,9 +1,11 @@
 // Les fenêtres par-dessus le bureau : la carte du rendu final, la lecture d'un fichier,
 // les missions précédentes, les réglages, et les petites notifications.
 import { useEffect, useMemo, useState } from 'react';
+import { roleInfo } from '../../shared/activity.ts';
+import type { Role } from '../../shared/protocol.ts';
 import { BRANCH_TOKENS, branchName, DEFAULT_BRANCH_PATTERN } from '../../shared/branch.ts';
 import { sfx } from '../audio/sfx.ts';
-import { denseOf, savePref, techOf, useOffice } from '../state/store.ts';
+import { denseOf, projectModeOf, savePref, techOf, useOffice } from '../state/store.ts';
 import { applySound } from '../audio/sound.ts';
 import { FileList } from './Panel.tsx';
 import { fmtDate, fmtDuration, plural, tilde } from './format.ts';
@@ -193,6 +195,7 @@ export function SettingsPanel() {
               {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </label>
+          <RoleModels />
           <BranchField />
           <div className="field">
             <span>Les permissions</span>
@@ -267,5 +270,37 @@ function BranchField() {
       <small className="muted">Exemple : <code>{preview}</code></small>
       <small className="muted branch-tokens">{BRANCH_TOKENS.map(([t, d]) => <span key={t}><code>{t}</code> {d}</span>)}</small>
     </label>
+  );
+}
+
+const MODEL_ROLES: Role[] = ['recherche', 'code', 'design', 'redaction', 'analyse'];
+
+/** Un cerveau par métier : par exemple Haiku pour l'exploration, Opus pour le code. « Comme l'équipe » = le réglage du dessus. */
+function RoleModels() {
+  const settings = useOffice((s) => s.settings);
+  const send = useOffice((s) => s.send);
+  useOffice(projectModeOf); // les noms des métiers suivent le mode projet
+  const set = (r: Role, model: string) => {
+    const next = { ...settings.roleModels };
+    if (model) next[r] = model; else delete next[r];
+    send({ t: 'settings', settings: { roleModels: next } });
+  };
+  const team = settings.teamModel === 'inherit' ? 'comme Max' : settings.teamModel;
+  return (
+    <div className="field">
+      <span>Un cerveau par métier</span>
+      <div className="role-models">
+        {MODEL_ROLES.map((r) => (
+          <label key={r}>
+            <b>{roleInfo(r).icon} {roleInfo(r).label}</b>
+            <select value={settings.roleModels[r] ?? ''} onChange={(e) => set(r, e.target.value)}>
+              <option value="">Comme l’équipe ({team})</option>
+              {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+      <small className="muted">Pour la prochaine mission. Haiku va vite et consomme peu : idéal pour explorer. Opus est le plus fin pour le code.</small>
+    </div>
   );
 }

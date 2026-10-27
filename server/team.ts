@@ -89,7 +89,7 @@ export function agentsJson(settings: Settings, project = false): string {
       description: m.description,
       prompt: `${m.prompt}\n\n${project ? PROJECT_COMMON : COMMON}`,
       tools: ROLE_TOOLS[m.role],
-      model: settings.teamModel || 'sonnet',
+      model: settings.roleModels?.[m.role] || settings.teamModel || 'sonnet',
     };
   }
   return JSON.stringify(out);
