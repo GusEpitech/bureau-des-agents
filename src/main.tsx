@@ -9,11 +9,13 @@ import { camera, world } from './engine/instance.ts';
 import { jukebox } from './audio/music.ts';
 import { party } from './ui/interact.ts';
 import { startTour } from './ui/tour.ts';
+import { installCopy } from './ui/md.ts';
 import { perf } from './ui/Office.tsx';
 import { connect, playReplay } from './net/link.ts';
 import { useOffice } from './state/store.ts';
 
 applySound(useOffice.getState().sound);
+installCopy();
 // pour les tests et les captures : rejouer une mission depuis la console
 (window as unknown as { __bureau: unknown }).__bureau = { playReplay, useOffice, world, perf, camera, jukebox, party, startTour };
 connect();

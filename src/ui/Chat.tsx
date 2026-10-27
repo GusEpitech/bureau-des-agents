@@ -5,7 +5,7 @@ import { sfx } from '../audio/sfx.ts';
 import { techOf, useOffice, type ChatMsg } from '../state/store.ts';
 import { usageLine } from './tech.ts';
 import { ToolGroup } from './Tech.tsx';
-import { mdToHtml } from './md.ts';
+import { copyText, mdToHtml } from './md.ts';
 import { tidy } from './tidy.ts';
 
 const time = (at: number) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -29,6 +29,7 @@ const Message = memo(function Message({ m, tech }: { m: ChatMsg; tech: boolean }
       <div className="chat-who">
         Max <span>{time(m.at)}</span>
         {m.kind === 'final' && <em className={m.ok === false ? 'ko' : ''}>{m.ok === false ? 'Arrêté' : 'Récap'}</em>}
+        <button type="button" className="chat-copy" title="Copier le message (en markdown)" onClick={(e) => copyText(m.text, e.currentTarget)}>Copier</button>
       </div>
       <div className="chat-bubble md" dangerouslySetInnerHTML={{ __html: html }} />
       {usage && <div className="chat-usage">{usage}</div>}

@@ -47,6 +47,16 @@ export function Panel() {
   // un plan de Max à valider : on ramène la conversation, c'est là qu'il se valide
   const planId = useOffice((s) => pendingPlanOf(s)?.requestId);
   useEffect(() => { if (planId) setTab('chat'); }, [planId]);
+  // Alt+1, Alt+2, Alt+3 (App.tsx) : les onglets dans l'ordre (le Diff seulement en mode projet)
+  useEffect(() => {
+    const onTab = (e: Event) => {
+      const tabs: Tab[] = useOffice.getState().mission?.project ? ['chat', 'mission', 'diff'] : ['chat', 'mission'];
+      const t = tabs[(e as CustomEvent<number>).detail];
+      if (t) pick(t);
+    };
+    window.addEventListener('bureau:tab', onTab);
+    return () => window.removeEventListener('bureau:tab', onTab);
+  }, []);
   return (
     <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
       {mission ? (

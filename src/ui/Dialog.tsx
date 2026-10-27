@@ -6,7 +6,7 @@ import { ROLES } from '../../shared/activity.ts';
 import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { pendingPlanOf, projectModeOf, useOffice } from '../state/store.ts';
+import { denseOf, pendingPlanOf, projectModeOf, useOffice } from '../state/store.ts';
 import { tilde } from './format.ts';
 import { tidy } from './tidy.ts';
 import { dictationHelp, useDictation } from './voice.ts';
@@ -99,6 +99,13 @@ function Portrait({ happy }: { happy: boolean }) {
 }
 
 export function Dialog() {
+  // vue développeur : la conversation remplace la boîte de dialogue de Max ; il ne reste que la saisie
+  const dense = useOffice(denseOf);
+  if (dense) return <footer className="dialog"><Composer /></footer>;
+  return <MaxDialog />;
+}
+
+function MaxDialog() {
   const connection = useOffice((s) => s.connection);
   const claude = useOffice((s) => s.claude);
   const mission = useOffice((s) => s.mission);
@@ -169,6 +176,7 @@ function Composer() {
   const draft = useOffice((s) => s.draft);
   const demo = useOffice((s) => s.connection === 'demo');
   const project = useOffice(projectModeOf);
+  const dense = useOffice(denseOf);
   const [text, setText] = useState('');
   const area = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef(text);
@@ -181,6 +189,14 @@ function Composer() {
     useOffice.setState({ draft: '' });
     setTimeout(() => area.current?.focus(), 30);
   }, [draft]);
+
+  // vue développeur : une seule ligne, qui grandit avec le texte (jusqu'à une dizaine de lignes)
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = '';
+    if (dense) el.style.height = `${Math.min(el.scrollHeight + 2, 220)}px`;
+  }, [text, dense]);
 
   const getBase = useCallback(() => textRef.current, []);
   const dict = useDictation(getBase, setText);
@@ -209,7 +225,7 @@ function Composer() {
         <textarea
           ref={area}
           value={text}
-          rows={2}
+          rows={dense ? 1 : 2}
           placeholder={demo ? 'C’est une démo : la vraie version tourne sur ton ordinateur, avec Claude Code.' : replaying ? 'Rediffusion en cours…' : placeholder}
           disabled={replaying}
           onChange={(e) => setText(e.target.value)}

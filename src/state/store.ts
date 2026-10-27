@@ -111,6 +111,10 @@ interface S {
   cameraAuto: boolean;
   /** le mode technique (vraies commandes, sorties, tokens) ; null = jamais réglé (suit le mode projet) */
   tech: boolean | null;
+  /** vue développeur (dense) : null = jamais réglée (activée d'office en mode projet) */
+  dense: boolean | null;
+  /** en vue développeur, le bureau animé est replié (la conversation prend toute la largeur) */
+  officeHidden: boolean;
   /** la visite guidée en cours (le texte que Max dit) */
   tour: { step: number; text: string } | null;
   historyOpen: boolean;
@@ -142,6 +146,8 @@ interface S {
 const pref = <T,>(key: string, fallback: T): T => {
   try { const v = localStorage.getItem('bureau:' + key); return v === null ? fallback : (JSON.parse(v) as T); } catch { return fallback; }
 };
+/** Vrai si l'utilisateur a déjà réglé cette préférence lui-même. */
+export const hasPref = (key: string) => { try { return localStorage.getItem('bureau:' + key) !== null; } catch { return false; } };
 export const savePref = (key: string, v: unknown) => { try { localStorage.setItem('bureau:' + key, JSON.stringify(v)); } catch { /* navigation privée */ } };
 
 const emptyChef = (): ChefView => ({ say: '', sayAt: 0, typing: '', thinkingAt: 0, act: null, acts: [] });
@@ -183,6 +189,8 @@ export const useOffice = create<S>((set, get) => ({
   voiceOn: pref('voice', true),
   cameraAuto: pref('cameraAuto', true),
   tech: pref<boolean | null>('tech', null),
+  dense: pref<boolean | null>('dense', null),
+  officeHidden: pref('officeHidden', false),
   tour: null,
   historyOpen: false,
   settingsOpen: false,
@@ -452,6 +460,9 @@ export const teamList = (s: S) => s.order.map((id) => s.agents[id]).filter(Boole
 
 /** Mode projet : la mission en cours travaille dans un de tes projets (ou, sans mission, un projet est choisi). */
 export const projectModeOf = (s: S) => (s.mission ? !!s.mission.project : s.connection === 'live' && !!s.settings.workdir);
+
+/** Vue développeur : réglée par l'utilisateur, sinon activée d'office en mode projet (jamais en cadre vertical ni en tournage). */
+export const denseOf = (s: S) => !s.vertical && !s.portrait && !s.filming && (s.dense ?? projectModeOf(s));
 
 // le dessin du bureau et les noms des métiers suivent le mode
 setProjectMode(projectModeOf(useOffice.getState()));
