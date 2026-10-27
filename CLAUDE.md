@@ -17,6 +17,13 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 
 - **`server/`** : `index.ts` (HTTP, WebSocket, sécurité), `bureau.ts` (les missions, les fichiers, les versions, l'historique),
   `claude.ts` (lance `claude -p` en stream-json et traduit sa sortie en événements du bureau), `team.ts` (les métiers et les consignes).
+- **Mode projet** : quand un dossier de travail est choisi (`settings.workdir`, sous la zone de saisie), la mission tourne dans ce
+  dossier au lieu d'un dossier neuf de `Missions/`. Le serveur crée une branche git `bureau/…` (et refuse si le dépôt a des
+  changements pas commités), Max et l'équipe reçoivent des consignes de développement (`projectPrompt`, `PROJECT_TEAM` dans
+  `team.ts`, sur les mêmes postes du bureau), et les copies de versions sont coupées (git s'en charge).
+  Côté navigateur, `projectModeOf` (store) pilote l'affichage : `roleInfo()` et `roleSign()` (`shared/activity.ts`) donnent les
+  noms des métiers et des écriteaux selon le mode (à utiliser plutôt que `ROLES[r].label`), et `.app.project` passe l'accent
+  au turquoise (`--accent-rgb` remplace les `rgba(255, 138, 61, …)`).
 - **`shared/protocol.ts`** : tous les messages entre le serveur et le navigateur, et les événements (`OfficeEvent`) : `start`, `hire`,
   `act`, `report`, `leave`, `file`, `ask`, `end`… **`shared/activity.ts`** : les métiers, leurs outils, les textes affichés.
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).

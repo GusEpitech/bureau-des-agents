@@ -1,6 +1,6 @@
 // Les fenêtres par-dessus le bureau : la carte du rendu final, la lecture d'un fichier,
 // les missions précédentes, les réglages, et les petites notifications.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { sfx } from '../audio/sfx.ts';
 import { savePref, useOffice } from '../state/store.ts';
 import { applySound } from '../audio/sound.ts';
@@ -118,8 +118,11 @@ export function History() {
   const missions = useOffice((s) => s.missions);
   const send = useOffice((s) => s.send);
   const connection = useOffice((s) => s.connection);
+  const [project, setProject] = useState<string | null>(null);
   if (!open) return null;
   const close = () => useOffice.setState({ historyOpen: false });
+  const projects = [...new Set(missions.map((m) => m.project ?? ''))];
+  const shown = project === null ? missions : missions.filter((m) => (m.project ?? '') === project);
   return (
     <div className="modal-back" onClick={close}>
       <div className="modal history" onClick={(e) => e.stopPropagation()}>
@@ -127,12 +130,20 @@ export function History() {
         <div className="modal-body">
           {connection !== 'live' && <p className="muted">Relie le bureau à Claude Code (npm start) pour retrouver tes missions.</p>}
           {connection === 'live' && !missions.length && <p className="muted">Aucune mission pour l’instant. La première t’attend en bas de l’écran.</p>}
-          {missions.map((m) => (
+          {projects.length > 1 && (
+            <div className="chips">
+              <button className={`chip ${project === null ? 'on' : ''}`} onClick={() => setProject(null)}>Tout</button>
+              {projects.map((p) => (
+                <button key={p} className={`chip ${project === p ? 'on' : ''}`} onClick={() => setProject(p)}>{p ? `🛠️ ${p}` : '📁 Missions libres'}</button>
+              ))}
+            </div>
+          )}
+          {shown.map((m) => (
             <div key={m.id} className="hist">
               <div className="hist-id">
                 <b>{m.title}</b>
                 <span className="small muted">
-                  {fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {plural(m.stats.agents, 'agent', 'agents')} · {plural(m.files.length, 'rendu', 'rendus')}
+                  {m.project ? `🛠️ ${m.project}${m.branch ? ` · 🌿 ${m.branch}` : ''} · ` : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {plural(m.stats.agents, 'agent', 'agents')} · {plural(m.files.length, 'rendu', 'rendus')}
                   {m.status === 'working' ? ' · en cours' : m.status === 'done' ? '' : m.status === 'stopped' ? ' · arrêtée' : ' · en erreur'}
                 </span>
               </div>
@@ -188,7 +199,7 @@ export function SettingsPanel() {
             <label className="radio"><input type="checkbox" checked={voiceOn} onChange={(e) => { useOffice.setState({ voiceOn: e.target.checked }); savePref('voice', e.target.checked); applySound(useOffice.getState().sound); }} /> La voix de Max (« C’est parti ! », « Mission accomplie ! », la visite guidée)</label>
             <label className="radio"><input type="checkbox" checked={cameraAuto} onChange={(e) => { useOffice.setState({ cameraAuto: e.target.checked }); savePref('cameraAuto', e.target.checked); }} /> En mode tournage, la caméra suit l’action toute seule</label>
           </div>
-          <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission, et ne lance jamais rien hors du bureau sans te demander.</p>
+          <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission (un nouveau dossier, ou celui que tu choisis sous la zone de saisie), et ne lance jamais rien hors du bureau sans te demander.</p>
           {claude?.found && <p className="small muted">Claude Code {claude.version} · {tilde(dir)}</p>}
           <div className="keys">
             <b>Raccourcis</b>

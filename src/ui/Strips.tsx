@@ -1,20 +1,21 @@
 // En cadre vertical (pour filmer un reel), sous le bureau : le plan de Max et la rangée de l'équipe,
 // lisibles en grand sur un téléphone.
 import { useShallow } from 'zustand/react/shallow';
-import { ROLES } from '../../shared/activity.ts';
-import { teamList, useOffice } from '../state/store.ts';
+import { ROLES, roleInfo } from '../../shared/activity.ts';
+import { projectModeOf, teamList, useOffice } from '../state/store.ts';
 import { Avatar } from './Panel.tsx';
 
 export function Strips() {
   const plan = useOffice((s) => s.plan);
   const team = useOffice(useShallow(teamList));
   const mission = useOffice((s) => s.mission);
+  useOffice(projectModeOf); // les noms des métiers changent en mode projet
   if (!mission) {
     return (
       <div className="strips">
         <div className="legend">
           {(['recherche', 'code', 'design', 'redaction', 'analyse'] as const).map((r) => (
-            <span key={r} style={{ ['--c' as string]: ROLES[r].color }}>{ROLES[r].icon} {ROLES[r].label}</span>
+            <span key={r} style={{ ['--c' as string]: ROLES[r].color }}>{roleInfo(r).icon} {roleInfo(r).label}</span>
           ))}
         </div>
       </div>

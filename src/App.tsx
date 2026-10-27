@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { jukebox } from './audio/music.ts';
 import { sfx } from './audio/sfx.ts';
 import { applySound } from './audio/sound.ts';
-import { savePref, useOffice, type Tod } from './state/store.ts';
+import { projectModeOf, savePref, useOffice, type Tod } from './state/store.ts';
 import { AskBar, Dialog } from './ui/Dialog.tsx';
 import { FinalCard, History, SettingsPanel, Toasts, Viewer } from './ui/Modals.tsx';
 import { Office } from './ui/Office.tsx';
@@ -45,6 +45,7 @@ function ExitFilming() {
 
 export function App() {
   const vertical = useOffice((s) => s.vertical || s.portrait);
+  const project = useOffice(projectModeOf);
   const filming = useOffice((s) => s.filming);
 
   // sur un écran en hauteur (téléphone), la mise en page verticale s'impose
@@ -88,7 +89,7 @@ export function App() {
   }, []);
 
   return (
-    <div className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''}`}>
+    <div className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''}`}>
       <div className="frame">
         <TopBar />
         <div className="main">

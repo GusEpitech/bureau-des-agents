@@ -23,6 +23,11 @@ export interface MissionInfo {
   prompt: string;
   /** le dossier de la mission, sur ton ordinateur */
   folder: string;
+  /** mode projet : le nom du dossier de travail choisi (absent = un dossier neuf dans « Missions ») */
+  project?: string;
+  /** mode projet : la branche git créée pour la mission, et celle d'où elle part */
+  branch?: string;
+  baseBranch?: string;
   createdAt: number;
   endedAt?: number;
   /** temps de travail cumulé (toutes les reprises comprises) */
@@ -92,6 +97,10 @@ export interface Settings {
   teamModel: string;
   /** auto : l'équipe décide seule et ne demande que pour les gestes risqués ; ask : elle demande avant chaque commande */
   permission: 'auto' | 'ask';
+  /** le dossier où l'équipe travaille : '' = un nouveau dossier pour chaque mission (dans « Missions ») */
+  workdir: string;
+  /** les derniers dossiers de travail choisis (tenu par le serveur) */
+  recent: string[];
 }
 
 export interface Quota { fiveHour: number; resetsAt: number | null }
@@ -110,7 +119,9 @@ export type ClientMsg =
   | { t: 'versions'; missionId: string; file: string }
   | { t: 'team_history' }
   | { t: 'replay'; missionId: string }
-  | { t: 'settings'; settings: Partial<Settings> };
+  | { t: 'settings'; settings: Partial<Settings> }
+  /** ouvre la fenêtre de choix de dossier de l'ordinateur, pour choisir le dossier de travail */
+  | { t: 'pick_folder' };
 
 // ── Serveur → navigateur ──
 export type ServerMsg =

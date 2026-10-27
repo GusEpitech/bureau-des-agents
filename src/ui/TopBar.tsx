@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { sfx } from '../audio/sfx.ts';
 import { applySound } from '../audio/sound.ts';
 import { replaySpeed, stopReplay } from '../net/link.ts';
-import { savePref, useOffice, type Tod } from '../state/store.ts';
+import { projectModeOf, savePref, useOffice, type Tod } from '../state/store.ts';
 import { fmtClock } from './format.ts';
 import { startTour } from './tour.ts';
 
@@ -39,6 +39,8 @@ export function TopBar() {
   const quota = useOffice((s) => s.quota);
   const replaying = useOffice((s) => s.replaying);
   const connection = useOffice((s) => s.connection);
+  // le nom du projet (mode projet) : celui de la mission, ou celui choisi pour la prochaine
+  const projectName = useOffice((s) => (projectModeOf(s) ? s.mission?.project ?? s.settings.workdir.split('/').filter(Boolean).pop() ?? '' : ''));
   const final = useOffice((s) => s.final);
   const vertical = useOffice((s) => s.vertical);
   const filming = useOffice((s) => s.filming);
@@ -67,6 +69,7 @@ export function TopBar() {
           <b>Le Bureau des agents</b>
           <span>{connection === 'demo' ? 'Démo · VibesMoney' : 'par VibesMoney'}</span>
         </div>
+        {projectName && <span className="project-badge" title="Mode projet : l’équipe travaille dans ce projet">🛠️ {projectName}</span>}
       </div>
 
       <div className="mission-head">

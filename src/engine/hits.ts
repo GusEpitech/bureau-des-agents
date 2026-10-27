@@ -1,5 +1,5 @@
 // Qu'y a-t-il sous la souris ? Un robot, le chat, un meuble, le tableau, l'horloge… Le plus en avant gagne.
-import { ROLES } from '../../shared/activity.ts';
+import { roleInfo, roleSign } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { textWidth } from './font.ts';
 import { furniturePlacement } from './furniture.ts';
@@ -11,12 +11,10 @@ export type Hit =
   | { kind: 'cat'; label: string }
   | { kind: 'object'; id: string; label: string; role?: Role };
 
-const ZONE_SIGN: Record<string, string> = { recherche: 'RECHERCHE', code: 'CODE', design: 'DESIGN', redaction: 'RÉDACTION', analyse: 'ANALYSE', chef: 'CHEF' };
-
 function furnitureLabel(id: string, kind: string, role?: Role): string {
   switch (kind) {
-    case 'desk': return `Un bureau du coin ${ROLES[role ?? 'renfort'].label}`;
-    case 'chair': return `Un poste du coin ${ROLES[role ?? 'renfort'].label}`;
+    case 'desk': return `Un bureau du coin ${roleInfo(role ?? 'renfort').label}`;
+    case 'chair': return `Un poste du coin ${roleInfo(role ?? 'renfort').label}`;
     case 'chefDesk': return 'Le bureau de Max : les rapports de l’équipe';
     case 'chefChair': return 'Le fauteuil de Max';
     case 'rack': return 'Le serveur : Claude Code et ton abonnement';
@@ -48,7 +46,7 @@ export function hitAt(world: World, x: number, y: number): Hit | null {
   for (const a of actors) {
     const ay = a.seated && a.seat ? a.seat.y : a.y;
     if (a.alpha > 0.3 && x >= a.x - 7 && x <= a.x + 7 && y >= ay - 21 && y <= ay + 1) {
-      return { kind: 'actor', id: a.id, label: a.id === 'chef' ? 'Max, le chef de projet' : `${a.name} · ${ROLES[a.role].label}` };
+      return { kind: 'actor', id: a.id, label: a.id === 'chef' ? 'Max, le chef de projet' : `${a.name} · ${roleInfo(a.role).label}` };
     }
   }
   if (world.cat.hit(x, y)) return { kind: 'cat', label: 'Pixel, le chat du bureau' };
@@ -66,9 +64,9 @@ export function hitAt(world: World, x: number, y: number): Hit | null {
   for (const w of WINDOWS) if (inRect(x, y, { x: w.x - 3, y: w.y - 3, w: w.w + 6, h: w.h + 8 })) return { kind: 'object', id: 'window', label: 'La fenêtre (jour, soir ou nuit)' };
   if (inRect(x, y, DOOR)) return { kind: 'object', id: 'door', label: 'La porte : c’est par là qu’arrive l’équipe' };
   for (const z of ZONES) {
-    const w = textWidth(ZONE_SIGN[z.role] ?? z.label) + 10;
+    const w = textWidth(roleSign(z.role)) + 10;
     const sx = z.x * T + 4, sy = z.role === 'chef' ? (z.y + z.h) * T - 12 : z.y * T + 3;
-    if (inRect(x, y, { x: sx, y: sy, w, h: 9 })) return { kind: 'object', id: `zone:${z.role}`, label: `Le coin ${ROLES[z.role].label} : qui y travaille, avec quels outils`, role: z.role };
+    if (inRect(x, y, { x: sx, y: sy, w, h: 9 })) return { kind: 'object', id: `zone:${z.role}`, label: `Le coin ${roleInfo(z.role).label} : qui y travaille, avec quels outils`, role: z.role };
   }
   return null;
 }
