@@ -6,7 +6,9 @@ import { roleInfo } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { projectModeOf, savePref, teamList, useOffice, type AgentView } from '../state/store.ts';
+import { projectModeOf, savePref, teamList, techOf, useOffice, type AgentView } from '../state/store.ts';
+import { techLabel } from './tech.ts';
+import { PromptBox, TechActs } from './Tech.tsx';
 import { ChatSection } from './Chat.tsx';
 import { EXAMPLES, PROJECT_EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
@@ -159,10 +161,23 @@ function TeamSection() {
   );
 }
 
+/** « 12 outils · 48 k tokens · 2 min 10 s » (mode technique). */
+export function agentStats(a: AgentView): string {
+  const tools = a.tools || a.acts.length;
+  const ms = (a.leftAt ?? Date.now()) - a.hiredAt;
+  return [
+    `${tools} outil${tools > 1 ? 's' : ''}`,
+    a.tokens ? `${a.tokens >= 1000 ? `${(a.tokens / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k` : a.tokens} tokens` : '',
+    fmtDuration(ms),
+  ].filter(Boolean).join(' · ');
+}
+
 function AgentCard({ a, open, onToggle }: { a: AgentView; open: boolean; onToggle: () => void }) {
   const role = roleInfo(a.role);
   const working = a.status === 'working' || a.status === 'reporting';
   const report = useMemo(() => (open && a.report ? mdToHtml(a.report) : ''), [open, a.report]);
+  const tech = useOffice(techOf);
+  const now = a.act ? (tech ? tidy(techLabel(a.act.tool, a.act.raw, a.act.detail)) : a.act.label) : 'S’installe à son bureau…';
   return (
     <div className={`agent ${a.status} ${open ? 'open' : ''}`} style={{ ['--c' as string]: role.color }}>
       <button className="agent-head" onClick={onToggle}>
@@ -170,15 +185,22 @@ function AgentCard({ a, open, onToggle }: { a: AgentView; open: boolean; onToggl
         <div className="agent-id">
           <b>{a.name} <span>{role.icon} {role.label}</span></b>
           <span className="agent-task">{a.task}</span>
-          <span className="agent-now">{working ? (a.act?.label ?? 'S’installe à son bureau…') : `${STATUS[a.status]}${a.leftAt ? ` · ${fmtDuration(a.leftAt - a.hiredAt)}` : ''}`}</span>
+          <span className={`agent-now ${tech ? 'mono' : ''}`}>{working ? now : `${STATUS[a.status]}${a.leftAt ? ` · ${fmtDuration(a.leftAt - a.hiredAt)}` : ''}`}</span>
+          {tech && <span className="agent-tech">{agentStats(a)}</span>}
         </div>
         <span className={`agent-status ${a.status}`} />
       </button>
       {open && (
         <div className="agent-more">
           <h4>Sa mission (écrite par Max)</h4>
-          <p className="brief">{a.prompt}</p>
-          {a.acts.length > 0 && (
+          {tech ? <PromptBox prompt={a.prompt} /> : <p className="brief">{a.prompt}</p>}
+          {tech && a.acts.length > 0 && (
+            <>
+              <h4>Ce qu’il a fait</h4>
+              <TechActs acts={a.acts} max={14} />
+            </>
+          )}
+          {!tech && a.acts.length > 0 && (
             <>
               <h4>Ce qu’il a fait</h4>
               <ul className="acts">
@@ -228,6 +250,7 @@ function FilesSection() {
 
 function FeedSection() {
   const feed = useOffice((s) => s.feed);
+  const tech = useOffice(techOf);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { if (box.current) box.current.scrollTop = box.current.scrollHeight; }, [feed.length]);
   return (
@@ -237,7 +260,7 @@ function FeedSection() {
         {feed.slice(-60).map((l) => (
           <div key={l.id} className={`feed-line ${l.kind}`}>
             <span className="feed-time">{new Date(l.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-            <b>{l.who}</b> {tidy(l.kind === 'chef' || l.kind === 'user' ? l.text.slice(0, 220) : l.text)}
+            <b>{l.who}</b> {tech && l.tech ? <code className="feed-tech">{tidy(l.tech)}</code> : tidy(l.kind === 'chef' || l.kind === 'user' ? l.text.slice(0, 220) : l.text)}
           </div>
         ))}
       </div>

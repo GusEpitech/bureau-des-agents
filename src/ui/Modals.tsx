@@ -2,7 +2,7 @@
 // les missions précédentes, les réglages, et les petites notifications.
 import { useMemo, useState } from 'react';
 import { sfx } from '../audio/sfx.ts';
-import { savePref, useOffice } from '../state/store.ts';
+import { savePref, techOf, useOffice } from '../state/store.ts';
 import { applySound } from '../audio/sound.ts';
 import { FileList } from './Panel.tsx';
 import { fmtDate, fmtDuration, plural, tilde } from './format.ts';
@@ -171,6 +171,7 @@ export function SettingsPanel() {
   const dir = useOffice((s) => s.dir);
   const voiceOn = useOffice((s) => s.voiceOn);
   const cameraAuto = useOffice((s) => s.cameraAuto);
+  const tech = useOffice(techOf);
   if (!open) return null;
   const close = () => useOffice.setState({ settingsOpen: false });
   return (
@@ -198,6 +199,7 @@ export function SettingsPanel() {
           <div className="field">
             <span>Le spectacle</span>
             <label className="radio"><input type="checkbox" checked={voiceOn} onChange={(e) => { useOffice.setState({ voiceOn: e.target.checked }); savePref('voice', e.target.checked); applySound(useOffice.getState().sound); }} /> La voix de Max (« C’est parti ! », « Mission accomplie ! », la visite guidée)</label>
+            <label className="radio"><input type="checkbox" checked={tech} onChange={(e) => { useOffice.setState({ tech: e.target.checked }); savePref('tech', e.target.checked); }} /> Le mode technique : les vraies commandes, leurs sorties, les prompts et les tokens (X)</label>
             <label className="radio"><input type="checkbox" checked={cameraAuto} onChange={(e) => { useOffice.setState({ cameraAuto: e.target.checked }); savePref('cameraAuto', e.target.checked); }} /> En mode tournage, la caméra suit l’action toute seule</label>
           </div>
           <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission (un nouveau dossier, ou celui que tu choisis sous la zone de saisie), et ne lance jamais rien hors du bureau sans te demander.</p>
@@ -211,6 +213,7 @@ export function SettingsPanel() {
             <span><kbd>J</kbd> jukebox</span>
             <span><kbd>N</kbd> jour, soir, nuit</span>
             <span><kbd>M</kbd> son</span>
+            <span><kbd>X</kbd> mode technique</span>
             <span><kbd>H</kbd> missions précédentes</span>
             <span><kbd>Échap</kbd> fermer, sortir du tournage</span>
             <span>🥚 Il y a un code secret… (pense aux vieux jeux vidéo)</span>

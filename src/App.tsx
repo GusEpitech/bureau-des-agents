@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { jukebox } from './audio/music.ts';
 import { sfx } from './audio/sfx.ts';
 import { applySound } from './audio/sound.ts';
-import { projectModeOf, savePref, useOffice, type Tod } from './state/store.ts';
+import { projectModeOf, savePref, techOf, useOffice, type Tod } from './state/store.ts';
 import { AskBar, Dialog } from './ui/Dialog.tsx';
 import { FinalCard, History, SettingsPanel, Toasts, Viewer } from './ui/Modals.tsx';
 import { Office } from './ui/Office.tsx';
@@ -83,6 +83,7 @@ export function App() {
       else if (k === 'n') { const n = TOD_NEXT[s.tod]; useOffice.setState({ tod: n }); savePref('tod', n); sfx('click'); }
       else if (k === 'm') { useOffice.setState({ sound: !s.sound }); savePref('sound', !s.sound); applySound(!s.sound); }
       else if (k === 'h') { useOffice.setState({ historyOpen: !s.historyOpen }); sfx('open'); }
+      else if (k === 'x') { const v = !techOf(s); useOffice.setState({ tech: v }); savePref('tech', v); sfx('click'); s.toast('info', v ? 'Mode technique : les vraies commandes et leurs sorties.' : 'Mode technique coupé.'); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

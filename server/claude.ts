@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { describeAct, NAMES, permissionText, roleOfType, ROLES, cut } from '../shared/activity.ts';
-import type { OfficeEvent, PlanItem, Quota, Role } from '../shared/protocol.ts';
+import type { OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
 
 export interface ClaudeBinary { path: string; version: string }
 
@@ -161,7 +161,7 @@ export class ClaudeProcess {
   }
 }
 
-export interface TurnResult { ok: boolean; text: string; ms: number; subtype: string }
+export interface TurnResult { ok: boolean; text: string; ms: number; subtype: string; usage?: TurnUsage }
 
 /**
  * Traduit ce que raconte Claude Code en événements du bureau.
@@ -218,7 +218,7 @@ export class Normalizer {
       case 'user': this.user(m); break;
       case 'result':
         this.typing.clear();
-        this.onResult({ ok: !m.is_error && m.subtype === 'success', text: String(m.result ?? ''), ms: Number(m.duration_ms ?? 0), subtype: String(m.subtype ?? '') });
+        this.onResult({ ok: !m.is_error && m.subtype === 'success', text: String(m.result ?? ''), ms: Number(m.duration_ms ?? 0), subtype: String(m.subtype ?? ''), usage: usageOf(m) });
         break;
       case 'rate_limit_event': {
         const w = m.rate_limit_info?.unifiedWindows ?? {};
@@ -318,7 +318,7 @@ export class Normalizer {
         } else {
           const { kind, label, detail } = describeAct(name, input);
           if ((name === 'Write' || name === 'Edit' || name === 'MultiEdit') && typeof input.file_path === 'string') this.writers.set(input.file_path, who);
-          this.emit({ k: 'act', who, id: c.id, kind, tool: name, label, detail });
+          this.emit({ k: 'act', who, id: c.id, kind, tool: name, label, detail, raw: clip(compact(input), MAX_RAW) });
         }
       }
     }
@@ -341,9 +341,27 @@ export class Normalizer {
         this.leave(id, !c.is_error && r.status !== 'failed', r.usage ?? { total_tokens: r.totalTokens, tool_uses: r.totalToolUseCount, duration_ms: r.totalDurationMs });
         continue;
       }
-      this.emit({ k: 'act_done', who, id, ok: !c.is_error });
+      this.emit({ k: 'act_done', who, id, ok: !c.is_error, out: clip(textOf(c.content), MAX_OUT) });
     }
   }
+}
+
+// le mode technique : l'entrée et la sortie des outils, tronquées pour ne pas gonfler l'enregistrement
+const MAX_RAW = 2000;
+const MAX_OUT = 4000;
+const clip = (s: string, max: number) => (s.length > max ? s.slice(0, max) + `\n… (${s.length - max} caractères de plus)` : s);
+function compact(v: unknown): string { try { return JSON.stringify(v) ?? ''; } catch { return ''; } }
+
+/** L'usage d'un tour, d'après le message « result » de stream-json. */
+function usageOf(m: Json): TurnUsage | undefined {
+  const u = (m.usage ?? {}) as Json;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const input = n(u.input_tokens), output = n(u.output_tokens);
+  if (input === undefined && output === undefined && n(m.total_cost_usd) === undefined) return undefined;
+  return {
+    input: input ?? 0, output: output ?? 0, cacheRead: n(u.cache_read_input_tokens), cacheWrite: n(u.cache_creation_input_tokens),
+    costUsd: n(m.total_cost_usd), turns: n(m.num_turns),
+  };
 }
 
 function textOf(content: unknown): string {

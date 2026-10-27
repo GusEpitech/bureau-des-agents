@@ -53,8 +53,10 @@ export type OfficeEvent =
   | { k: 'say'; who: string; text: string }
   | { k: 'plan'; items: PlanItem[] }
   | { k: 'hire'; id: string; role: Role; type: string; name: string; task: string; prompt: string }
-  | { k: 'act'; who: string; id: string; kind: ActKind; tool: string; label: string; detail: string }
-  | { k: 'act_done'; who: string; id: string; ok: boolean }
+  /** raw : l'entrée brute de l'outil (JSON compact, tronqué), pour le mode technique */
+  | { k: 'act'; who: string; id: string; kind: ActKind; tool: string; label: string; detail: string; raw?: string }
+  /** out : la sortie de l'outil (tronquée), pour le mode technique */
+  | { k: 'act_done'; who: string; id: string; ok: boolean; out?: string }
   /** le rapport qu'un agent rend au chef */
   | { k: 'report'; who: string; text: string }
   /** un agent a fini son travail et quitte son poste */
@@ -63,10 +65,13 @@ export type OfficeEvent =
   /** full = la bulle montre l'action en entier (sinon, on répond dans le panneau, où tout est affiché) */
   | { k: 'ask'; who: string; requestId: string; tool: string; label: string; detail: string; full: boolean }
   | { k: 'ask_done'; requestId: string; allow: boolean; cancelled?: boolean }
-  | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean }
+  | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean; usage?: TurnUsage }
   | { k: 'error'; message: string };
 
 /** Un événement daté, tel qu'il est enregistré. */
+/** Ce qu'a consommé un tour de conversation (le message « result » de Claude Code). */
+export interface TurnUsage { input: number; output: number; cacheRead?: number; cacheWrite?: number; costUsd?: number; turns?: number }
+
 export interface Logged { at: number; ev: OfficeEvent }
 
 export interface ClaudeInfo { found: boolean; version?: string; path?: string }

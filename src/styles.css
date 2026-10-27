@@ -663,3 +663,28 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 .chat-msg.live .chat-bubble { border-style: dashed; }
 .chat-note { align-self: center; font-size: 11.5px; color: var(--dim); text-align: center; max-width: 90%; }
 .chat-note.error { color: #ff8a8a; }
+
+/* Le mode technique : les appels d'outils, leur entrée et leur sortie */
+.tool-group { display: flex; flex-direction: column; gap: 2px; align-self: stretch; }
+.tool-line button, .tool-sum { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; text-align: left; border: 0; background: transparent; padding: 2px 6px; border-radius: 6px; color: var(--muted); font-size: 11.5px; }
+.tool-line button:hover, .tool-sum:hover { background: var(--surface2); }
+.tool-line code, .tool-sum code, .feed-tech, .agent-now.mono, .chat-usage, .agent-tech { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+.tool-line code, .tool-sum code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9c9cf; font-size: 11.5px; }
+.tool-sum span { flex: none; color: var(--orange2); font-weight: 600; }
+.tool-who { flex: none; color: var(--orange2); font-weight: 600; }
+.tool-mark { flex: none; font-size: 11px; }
+.tool-mark.ok { color: var(--green); }
+.tool-mark.ko { color: #ff8a8a; }
+.tool-mark.run { color: var(--dim); }
+.tool-line.open { background: var(--surface2); border-radius: 8px; }
+.tool-io { display: flex; flex-direction: column; gap: 4px; padding: 0 6px 6px; }
+.tool-io pre, .tech-prompt pre { margin: 0; max-height: 220px; overflow: auto; padding: 6px 8px; border-radius: 6px; background: #08080b; border: 1px solid var(--line); font: 11px/1.45 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: #d6d6dc; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-io .tool-raw { border-left: 2px solid rgba(var(--accent-rgb), 0.6); }
+.tool-io .tool-out.muted { color: var(--dim); }
+.chat-usage { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+.feed-tech { font-size: 11px; color: #c9c9cf; overflow-wrap: anywhere; }
+.agent-now.mono { font-size: 11px; }
+.agent-tech { display: block; font-size: 10.5px; color: var(--dim); }
+.tech-prompt { margin: 4px 0 8px; }
+.tech-prompt summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.tech-prompt pre { margin-top: 6px; max-height: 300px; }

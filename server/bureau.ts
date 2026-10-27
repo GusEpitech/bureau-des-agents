@@ -10,7 +10,7 @@ import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, w
 import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats } from '../shared/activity.ts';
-import type { ClaudeInfo, FileInfo, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
+import type { ClaudeInfo, FileInfo, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
 import { ClaudeProcess, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
 import { agentsJson, ALWAYS_ALLOWED, chefPrompt, SESSION_TOOLS } from './team.ts';
 
@@ -81,6 +81,18 @@ interface Current {
   busySince: number | null;
   stopAsked: boolean;
   lastChefText: string;
+  /** ce que le tour en cours a consommé (cumulé si Max reprend la main après l'équipe) */
+  usage?: TurnUsage;
+}
+
+/** Additionne l'usage de deux tours (un tour peut se faire en plusieurs résultats). */
+function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage {
+  if (!a) return b;
+  const sum = (x?: number, y?: number) => (x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0));
+  return {
+    input: a.input + b.input, output: a.output + b.output, cacheRead: sum(a.cacheRead, b.cacheRead), cacheWrite: sum(a.cacheWrite, b.cacheWrite),
+    costUsd: sum(a.costUsd, b.costUsd), turns: sum(a.turns, b.turns),
+  };
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -384,6 +396,7 @@ export class Bureau {
 
   private onResult(cur: Current, r: TurnResult) {
     const l = cur.live;
+    if (r.usage) cur.usage = addUsage(cur.usage, r.usage);
     // des membres de l'équipe travaillent encore : Max reprendra la main quand ils auront rendu leur travail
     if (l && l.norm.present.size > 0 && r.ok && !cur.stopAsked) return;
     this.finish(cur, r.ok, r.text.trim() || cur.lastChefText, r.ms, cur.stopAsked);
@@ -407,7 +420,9 @@ export class Bureau {
     // les demandes encore ouvertes n'ont plus d'objet
     const l = cur.live;
     if (l) for (const id of l.norm.pendingRequests()) { l.norm.forgetRequest(id); this.record(cur, { k: 'ask_done', requestId: id, allow: false, cancelled: true }); }
-    this.record(cur, { k: 'end', ok, text: m.final ?? '', ms, stopped });
+    const usage = cur.usage;
+    cur.usage = undefined;
+    this.record(cur, { k: 'end', ok, text: m.final ?? '', ms, stopped, ...(usage ? { usage } : {}) });
     this.broadcast({ t: 'mission', mission: m });
     this.save();
     // Max reste disponible un moment pour les retouches, puis s'endort (il reprendra sa séance si on lui reparle)

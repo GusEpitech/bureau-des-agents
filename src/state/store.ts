@@ -3,13 +3,14 @@
 import { create } from 'zustand';
 import { countStats, emptyStats, setProjectMode } from '../../shared/activity.ts';
 import type {
-  ActKind, ClaudeInfo, ClientMsg, FileInfo, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, VersionInfo,
+  ActKind, ClaudeInfo, ClientMsg, FileInfo, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
 } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { say } from '../audio/voice.ts';
 import { bus } from './bus.ts';
+import { techLabel } from '../ui/tech.ts';
 
-export interface ActView { id: string; kind: ActKind; label: string; detail: string; at: number; ok?: boolean }
+export interface ActView { id: string; kind: ActKind; label: string; detail: string; at: number; ok?: boolean; tool?: string; raw?: string; out?: string }
 
 export interface AgentView {
   id: string;
@@ -40,10 +41,17 @@ export interface ChefView {
 
 export interface AskView { requestId: string; who: string; tool: string; label: string; detail: string; full: boolean; at: number }
 
-export interface FeedLine { id: number; at: number; who: string; text: string; kind: 'user' | 'chef' | 'hire' | 'act' | 'report' | 'file' | 'ask' | 'end' | 'error' }
+export interface FeedLine { id: number; at: number; who: string; text: string; /** la vraie commande (mode technique) */ tech?: string; kind: 'user' | 'chef' | 'hire' | 'act' | 'report' | 'file' | 'ask' | 'end' | 'error' }
 
 /** Un message de la conversation avec Max (ce que tu dis, ce qu'il répond, qui il appelle, ses récaps). */
-export interface ChatMsg { id: number; at: number; kind: 'user' | 'chef' | 'final' | 'note' | 'error'; text: string; ok?: boolean }
+export interface ChatMsg {
+  id: number; at: number; kind: 'user' | 'chef' | 'final' | 'note' | 'error' | 'tool'; text: string; ok?: boolean;
+  /** kind 'tool' (mode technique) : l'appel d'outil, complété par sa sortie quand il se termine */
+  act?: { id: string; who: string; tool: string; raw: string; out?: string; ok?: boolean };
+  /** le récap d'un tour : ce qu'il a consommé, et combien de temps l'équipe a travaillé */
+  usage?: TurnUsage;
+  ms?: number;
+}
 
 export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 
@@ -98,6 +106,8 @@ interface S {
   voiceOn: boolean;
   /** en mode tournage, la caméra suit l'action toute seule */
   cameraAuto: boolean;
+  /** le mode technique (vraies commandes, sorties, tokens) ; null = jamais réglé (suit le mode projet) */
+  tech: boolean | null;
   /** la visite guidée en cours (le texte que Max dit) */
   tour: { step: number; text: string } | null;
   historyOpen: boolean;
@@ -160,6 +170,7 @@ export const useOffice = create<S>((set, get) => ({
   music: { playing: false, index: 0, volume: 0.55 },
   voiceOn: pref('voice', true),
   cameraAuto: pref('cameraAuto', true),
+  tech: pref<boolean | null>('tech', null),
   tour: null,
   historyOpen: false,
   settingsOpen: false,
@@ -250,7 +261,7 @@ export const useOffice = create<S>((set, get) => ({
       const line: FeedLine = { id: ++feedId, at, who, text, kind };
       return [...get().feed, line].slice(-MAX_FEED);
     };
-    const chat = (kind: ChatMsg['kind'], text: string, ok?: boolean) => [...get().chat, { id: ++feedId, at, kind, text, ok }];
+    const chat = (kind: ChatMsg['kind'], text: string, ok?: boolean, extra?: Partial<ChatMsg>) => [...get().chat, { id: ++feedId, at, kind, text, ok, ...extra }];
     const agentName = (who: string) => (who === 'chef' ? 'Max' : s.agents[who]?.name ?? 'Un agent');
     switch (ev.k) {
       case 'start': {
@@ -298,7 +309,7 @@ export const useOffice = create<S>((set, get) => ({
         break;
       }
       case 'act': {
-        const act: ActView = { id: ev.id, kind: ev.kind, label: ev.label, detail: ev.detail, at };
+        const act: ActView = { id: ev.id, kind: ev.kind, label: ev.label, detail: ev.detail, at, tool: ev.tool, raw: ev.raw };
         const stats = { ...s.stats };
         countStats(stats, ev);
         if (ev.who === 'chef') set({ chef: { ...s.chef, act, acts: [...s.chef.acts, act].slice(-MAX_ACTS) }, stats });
@@ -306,12 +317,27 @@ export const useOffice = create<S>((set, get) => ({
           const a = s.agents[ev.who];
           set({ agents: { ...s.agents, [ev.who]: { ...a, act, acts: [...a.acts, act].slice(-MAX_ACTS) } }, stats });
         } else set({ stats });
-        if (ev.kind !== 'plan') set({ feed: feed(agentName(ev.who), ev.label, 'act') });
+        if (ev.kind !== 'plan') {
+          const lines = feed(agentName(ev.who), ev.label, 'act');
+          lines[lines.length - 1].tech = techLabel(ev.tool, ev.raw, ev.detail);
+          set({ feed: lines, chat: chat('tool', ev.label, undefined, { act: { id: ev.id, who: ev.who, tool: ev.tool, raw: ev.raw ?? '' } }) });
+        }
         if (live && Date.now() - lastActSound > 220) { lastActSound = Date.now(); sfx(ev.kind === 'search' || ev.kind === 'web' ? 'search' : 'tick'); }
         break;
       }
       case 'act_done': {
-        const mark = (acts: ActView[]) => acts.map((x) => (x.id === ev.id ? { ...x, ok: ev.ok } : x));
+        const mark = (acts: ActView[]) => acts.map((x) => (x.id === ev.id ? { ...x, ok: ev.ok, out: ev.out } : x));
+        // la ligne de l'outil dans la conversation (on la cherche depuis la fin : c'est presque toujours une des dernières)
+        const c = get().chat;
+        for (let i = c.length - 1; i >= 0 && i >= c.length - 400; i--) {
+          const x = c[i];
+          if (x.kind === 'tool' && x.act?.id === ev.id) {
+            const next = c.slice();
+            next[i] = { ...x, ok: ev.ok, act: { ...x.act, ok: ev.ok, out: ev.out } };
+            set({ chat: next });
+            break;
+          }
+        }
         if (ev.who === 'chef') set({ chef: { ...s.chef, acts: mark(s.chef.acts) } });
         else if (s.agents[ev.who]) set({ agents: { ...s.agents, [ev.who]: { ...s.agents[ev.who], acts: mark(s.agents[ev.who].acts) } } });
         break;
@@ -351,11 +377,16 @@ export const useOffice = create<S>((set, get) => ({
         const workMs = s.workMs + (s.busySince ? Math.max(0, at - s.busySince) : 0);
         // le récap de Max : souvent son dernier message, qui devient alors le récap (pas de doublon)
         const msgs = get().chat;
-        const last = msgs[msgs.length - 1];
+        // (les lignes d'outils du mode technique ne comptent pas : le récap est le dernier message de Max)
+        let li = msgs.length - 1;
+        while (li >= 0 && msgs[li].kind === 'tool') li--;
+        const last = msgs[li];
         const text = ev.text.trim();
+        const turnMs = s.busySince ? Math.max(0, at - s.busySince) : 0;
+        const meta = { usage: ev.usage, ms: turnMs };
         const recap = last?.kind === 'chef' && (!text || last.text.trim() === text)
-          ? [...msgs.slice(0, -1), { ...last, kind: 'final' as const, ok: ev.ok }]
-          : text ? chat('final', text, ev.ok) : chat('note', ev.ok ? 'Mission accomplie.' : ev.stopped ? 'Mission arrêtée.' : 'La mission s’est mal terminée.');
+          ? [...msgs.slice(0, li), { ...last, kind: 'final' as const, ok: ev.ok, ...meta }, ...msgs.slice(li + 1)]
+          : text ? chat('final', text, ev.ok, meta) : chat('note', ev.ok ? 'Mission accomplie.' : ev.stopped ? 'Mission arrêtée.' : 'La mission s’est mal terminée.', ev.ok, meta);
         set({
           final: { ok: ev.ok, text: ev.text, ms: ev.ms, stopped: ev.stopped, at }, busySince: null, workMs, asks: {},
           showFinal: false, chat: recap, feed: feed('Max', ev.ok ? 'Mission accomplie !' : ev.stopped ? 'Mission arrêtée.' : 'La mission s’est mal terminée.', 'end'),
@@ -385,3 +416,6 @@ export const projectModeOf = (s: S) => (s.mission ? !!s.mission.project : s.conn
 // le dessin du bureau et les noms des métiers suivent le mode
 setProjectMode(projectModeOf(useOffice.getState()));
 useOffice.subscribe((s) => setProjectMode(projectModeOf(s)));
+
+/** Le mode technique : réglé à la main, sinon activé en mode projet. */
+export const techOf = (s: S) => s.tech ?? projectModeOf(s);
