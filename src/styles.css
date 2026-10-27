@@ -640,3 +640,163 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 .exit-filming button { border: 1px solid var(--line2); background: rgba(14, 14, 18, 0.92); backdrop-filter: blur(10px); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
 .exit-filming .quit { border-color: rgba(var(--accent-rgb), 0.5); color: var(--orange2); }
 @media (max-width: 760px) { .kv div { grid-template-columns: 1fr; } .who-row { grid-template-columns: auto auto 1fr; } .who-state { display: none; } }
+
+/* La conversation avec Max (panneau de droite) */
+.panel-tabs { display: flex; align-items: center; gap: 8px; }
+.panel-tabs .seg { flex: 1; justify-content: stretch; }
+.panel-tabs .seg button { flex: 1; }
+.panel.chatting { overflow: hidden; }
+.chat-card { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.chat { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.chat-msg { display: flex; flex-direction: column; gap: 3px; max-width: 94%; }
+.chat-msg.user { align-self: flex-end; align-items: flex-end; }
+.chat-who { font: 700 11px var(--pixel); color: var(--orange); display: flex; align-items: center; gap: 6px; }
+.chat-msg.user .chat-who { color: var(--muted); }
+.chat-who span { color: var(--dim); font-weight: 500; }
+.chat-who em { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(61, 220, 151, 0.15); color: var(--green); }
+.chat-who em.ko { background: rgba(255, 138, 138, 0.12); color: #ff8a8a; }
+.chat-bubble { padding: 8px 11px; border-radius: 12px; background: var(--surface2); border: 1px solid var(--line); font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-bubble.md { white-space: normal; }
+.chat-msg.user .chat-bubble { background: rgba(var(--accent-rgb), 0.12); border-color: rgba(var(--accent-rgb), 0.3); border-bottom-right-radius: 4px; }
+.chat-msg.chef .chat-bubble { border-bottom-left-radius: 4px; }
+.chat-msg.recap .chat-bubble { border-color: rgba(61, 220, 151, 0.35); }
+.chat-msg.live .chat-bubble { border-style: dashed; }
+.chat-note { align-self: center; font-size: 11.5px; color: var(--dim); text-align: center; max-width: 90%; }
+.chat-note.error { color: #ff8a8a; }
+
+/* Le mode technique : les appels d'outils, leur entrée et leur sortie */
+.tool-group { display: flex; flex-direction: column; gap: 2px; align-self: stretch; }
+.tool-line button, .tool-sum { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; text-align: left; border: 0; background: transparent; padding: 2px 6px; border-radius: 6px; color: var(--muted); font-size: 11.5px; }
+.tool-line button:hover, .tool-sum:hover { background: var(--surface2); }
+.tool-line code, .tool-sum code, .feed-tech, .agent-now.mono, .chat-usage, .agent-tech { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+.tool-line code, .tool-sum code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9c9cf; font-size: 11.5px; }
+.tool-sum span { flex: none; color: var(--orange2); font-weight: 600; }
+.tool-who { flex: none; color: var(--orange2); font-weight: 600; }
+.tool-mark { flex: none; font-size: 11px; }
+.tool-mark.ok { color: var(--green); }
+.tool-mark.ko { color: #ff8a8a; }
+.tool-mark.run { color: var(--dim); }
+.tool-line.open { background: var(--surface2); border-radius: 8px; }
+.tool-io { display: flex; flex-direction: column; gap: 4px; padding: 0 6px 6px; }
+.tool-io pre, .tech-prompt pre { margin: 0; max-height: 220px; overflow: auto; padding: 6px 8px; border-radius: 6px; background: #08080b; border: 1px solid var(--line); font: 11px/1.45 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: #d6d6dc; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-io .tool-raw { border-left: 2px solid rgba(var(--accent-rgb), 0.6); }
+.tool-io .tool-out.muted { color: var(--dim); }
+.chat-usage { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+.feed-tech { font-size: 11px; color: #c9c9cf; overflow-wrap: anywhere; }
+.agent-now.mono { font-size: 11px; }
+.agent-tech { display: block; font-size: 10.5px; color: var(--dim); }
+.tech-prompt { margin: 4px 0 8px; }
+.tech-prompt summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.tech-prompt pre { margin-top: 6px; max-height: 300px; }
+/* Mode projet : l'onglet « Diff » et les actions git */
+.panel-tabs .seg button { padding-inline: 6px; white-space: nowrap; font-size: 12.5px; }
+.diff-card { display: flex; flex-direction: column; gap: 8px; }
+.diff-card .warn, .git-bar .warn { color: var(--orange2); }
+.diff-card .grow { flex: 1; }
+.git-bar { display: flex; flex-direction: column; gap: 7px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.git-state { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.git-state code, .git-result code { font: 11.5px ui-monospace, monospace; background: var(--surface3); padding: 1px 5px; border-radius: 4px; }
+.git-commit { display: flex; gap: 6px; align-items: stretch; }
+.git-commit textarea { flex: 1; min-width: 0; resize: vertical; border-radius: 8px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); padding: 6px 8px; font: 12px/1.4 ui-monospace, monospace; outline: none; }
+.git-commit textarea:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+.git-actions { flex-wrap: wrap; }
+.btn.danger { background: rgba(255, 93, 93, 0.15); border-color: rgba(255, 93, 93, 0.55); color: #ff9d9d; }
+.git-result { margin: 0; overflow-wrap: anywhere; }
+.git-result.ok { color: var(--green); }
+.git-result.ko { color: #ff8a8a; }
+.git-result a { color: var(--orange2); }
+.diff-head { display: flex; align-items: center; gap: 8px; }
+.diff-count { font: 600 11.5px ui-monospace, monospace; white-space: nowrap; }
+.diff-count i { font-style: normal; }
+.diff-count .plus { color: var(--green); }
+.diff-count .minus { color: #ff7b7b; }
+.diff-files { display: flex; flex-direction: column; gap: 4px; }
+.diff-file { border: 1px solid var(--line); border-radius: 8px; background: var(--surface2); overflow: hidden; }
+.diff-file-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; background: transparent; color: var(--ink); text-align: left; font-size: 12.5px; }
+.diff-file-head:hover { background: var(--surface3); }
+.diff-st { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; font: 700 11px ui-monospace, monospace; }
+.diff-st.added { background: rgba(61, 220, 151, 0.18); color: var(--green); }
+.diff-st.modified { background: rgba(255, 201, 61, 0.16); color: #ffc93d; }
+.diff-st.deleted { background: rgba(255, 93, 93, 0.16); color: #ff7b7b; }
+.diff-st.renamed { background: rgba(79, 179, 255, 0.16); color: #4fb3ff; }
+.diff-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, monospace; }
+.diff-chev { flex: none; color: var(--dim); }
+.diff-patch { margin: 0; max-height: 460px; overflow: auto; background: #08080b; border-top: 1px solid var(--line); font: 11.5px/1.45 ui-monospace, monospace; }
+.diff-patch .dl { display: block; padding: 0 8px; white-space: pre; min-width: max-content; }
+.diff-patch .add { background: rgba(61, 220, 151, 0.12); color: #b5f5d5; }
+.diff-patch .del { background: rgba(255, 93, 93, 0.12); color: #ffc2c2; }
+.diff-patch .hunk { background: rgba(79, 179, 255, 0.1); color: #8fcbff; }
+.diff-patch .meta { color: var(--dim); font-style: italic; }
+.diff-patch .ctx { color: #b9b9c2; }
+.diff-empty { margin: 0; padding: 8px; border-top: 1px solid var(--line); }
+.diff-back { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; padding: 16px; }
+.diff-card.big { width: min(1200px, 96vw); height: min(880px, 92vh); overflow-y: auto; }
+.diff-card.big .diff-patch { max-height: none; }
+/* Le plan de Max à valider (mode projet) */
+.chat-msg.plan { max-width: 100%; align-self: stretch; }
+.chat-msg.plan .chat-bubble { border-color: rgba(var(--accent-rgb), 0.45); }
+.chat-msg.plan.pending .chat-bubble { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1); }
+.chat-msg.plan.cancelled .chat-bubble, .chat-msg.plan.changes .chat-bubble { opacity: 0.7; }
+.chat-who em.plan-state { background: rgba(var(--accent-rgb), 0.15); color: var(--orange2); }
+.chat-who em.plan-state.approved { background: rgba(61, 220, 151, 0.15); color: var(--green); }
+.chat-who em.plan-state.cancelled { background: rgba(255, 255, 255, 0.06); color: var(--dim); }
+.plan-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.plan-edit { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.plan-edit textarea { resize: vertical; border-radius: 10px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); padding: 8px 10px; font: 500 13px/1.4 var(--font); outline: none; }
+.plan-edit textarea:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+/* ── Les blocs de code (conversation, rapports) ── */
+.md .code-block { margin: 8px 0; border: 1px solid var(--line2); border-radius: 8px; background: #08080b; overflow: hidden; }
+.md .code-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 6px 3px 10px; background: var(--surface2); border-bottom: 1px solid var(--line); font: 600 10.5px var(--pixel); color: var(--muted); text-transform: lowercase; }
+.code-copy, .chat-copy { border: 1px solid var(--line2); background: transparent; color: var(--muted); border-radius: 6px; padding: 1px 7px; font: 600 11px var(--font); cursor: pointer; }
+.code-copy:hover, .chat-copy:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.3); }
+.md .code-block pre { margin: 0; padding: 9px 11px; background: transparent; border-radius: 0; overflow-x: auto; max-height: 460px; }
+.md .code-block code { background: none; padding: 0; font: 12px/1.55 ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace; white-space: pre; overflow-wrap: normal; color: #e6e6ec; }
+.hl-k { color: #c792ea; }
+.hl-s { color: #a5e3a0; }
+.hl-n { color: #f5b971; }
+.hl-c { color: #6e7380; font-style: italic; }
+.chat-copy { margin-left: auto; opacity: 0; transition: opacity 0.15s; }
+.chat-msg:hover .chat-copy, .chat-copy:focus-visible { opacity: 1; }
+.chat-msg.chef { width: 94%; }
+@media (hover: none) { .chat-copy { opacity: 1; } }
+
+/* ── La vue développeur : la conversation en grand, le bureau en petit, tout plus serré ── */
+.app.dense .main { grid-template-columns: minmax(0, 1fr) minmax(420px, 46%); position: relative; }
+.app.dense.office-hidden .main { grid-template-columns: minmax(0, 1fr); }
+.app.dense.office-hidden .stage { display: none; }
+.app.dense.office-hidden .panel { border-left: 0; align-items: center; }
+.app.dense.office-hidden .panel > * { width: min(100%, 1040px); }
+/* bureau replié : la demande de permission et le récap flottent au-dessus de la conversation */
+.stage-float { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+.stage-float > * { pointer-events: auto; }
+
+.app.dense .topbar { padding: 4px 12px; gap: 10px; }
+.app.dense .brand b { font-size: 13px; }
+.app.dense .brand span { display: none; }
+.app.dense .icon-btn { width: 28px; height: 28px; font-size: 13.5px; }
+.app.dense .stats { font-size: 12px; }
+
+.app.dense .panel { padding: 8px; gap: 8px; font-size: 13px; }
+.app.dense .card { padding: 9px 10px; border-radius: 10px; }
+.app.dense .card h3 { margin-bottom: 6px; font-size: 10.5px; }
+.app.dense .panel-tabs .seg button { padding: 4px 10px; font-size: 12.5px; }
+.app.dense .chat-card { padding: 0; }
+.app.dense .chat { gap: 8px; padding: 10px; }
+.app.dense .chat-bubble { padding: 6px 10px; font-size: 13px; line-height: 1.5; border-radius: 9px; }
+.app.dense .md { font-size: 13px; }
+.app.dense .chat-who { font-size: 10.5px; }
+
+.app.dense .dialog { padding: 6px 12px 8px; gap: 4px; }
+.app.dense .composer textarea { padding: 7px 11px; font-size: 13.5px; line-height: 1.45; border-radius: 9px; overflow-y: auto; }
+.app.dense .composer-row { gap: 6px; align-items: flex-end; }
+.app.dense .composer .btn { padding: 6px 12px; font-size: 13px; border-radius: 9px; }
+.app.dense .composer .send { padding-inline: 12px; }
+.app.dense .mic { width: 34px; height: 34px; border-radius: 9px; }
+.app.dense .folder-pick { margin-top: 4px; font-size: 12px; }
+
+/* écran étroit en vue développeur : on garde la conversation, on laisse tomber le bureau animé */
+@media (max-width: 760px) {
+  .app.dense .main { grid-template-columns: minmax(0, 1fr); }
+  .app.dense .stage { display: none; }
+  .app.dense .panel { display: flex; border-left: 0; }
+}

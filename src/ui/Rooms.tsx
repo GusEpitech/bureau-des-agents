@@ -7,12 +7,14 @@ import type { PlanItem, Role } from '../../shared/protocol.ts';
 import { jukebox, TRACKS } from '../audio/music.ts';
 import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
-import { savePref, teamList, useOffice, type ActView, type Tod } from '../state/store.ts';
+import { savePref, teamList, techOf, useOffice, type ActView, type Tod } from '../state/store.ts';
 import { useShallow } from 'zustand/react/shallow';
 import { fileIcon, fmtClock, fmtDate, fmtDuration, fmtSize, plural, readable, tilde } from './format.ts';
 import { party } from './interact.ts';
 import { mdToHtml } from './md.ts';
-import { Avatar } from './Panel.tsx';
+import { agentStats, Avatar } from './Panel.tsx';
+import { techLabel } from './tech.ts';
+import { PromptBox, TechActs } from './Tech.tsx';
 import { tidy } from './tidy.ts';
 
 const ICON: Record<string, string> = {
@@ -53,6 +55,7 @@ export function Rooms() {
 // ── La fiche d'un agent ──
 function AgentRoom({ id }: { id: string }) {
   const a = useOffice((s) => s.agents[id]);
+  const tech = useOffice(techOf);
   const live = world.actors.get(id);
   const html = useMemo(() => (a?.report ? mdToHtml(tidy(a.report)) : ''), [a?.report]);
   if (!a) return <Shell title="Cet agent n’est plus là">Il a quitté le bureau.</Shell>;
@@ -64,18 +67,19 @@ function AgentRoom({ id }: { id: string }) {
         <Avatar role={a.role} size={72} />
         <div>
           <span className={`pill-status ${a.status}`}>{working ? (live?.seated ? 'Au travail' : 'En chemin') : a.status === 'done' ? 'A rendu son travail' : 'N’a pas pu finir'}</span>
-          <p className="now">{working && a.act ? <><i>{ICON[a.act.kind]}</i>{a.act.label}</> : a.status === 'done' ? 'Son rapport est sur le bureau de Max.' : working ? 'Il s’installe à son poste…' : ''}</p>
+          <p className="now">{working && a.act ? <><i>{ICON[a.act.kind]}</i>{tech ? <code>{tidy(techLabel(a.act.tool, a.act.raw, a.act.detail))}</code> : a.act.label}</> : a.status === 'done' ? 'Son rapport est sur le bureau de Max.' : working ? 'Il s’installe à son poste…' : ''}</p>
           <p className="small muted">Un vrai sous-agent Claude Code (« {role.type || 'renfort'} »), avec ses propres outils : {ROLE_TOOLS[a.role].join(', ') || 'ceux de Max'}.</p>
         </div>
       </div>
       <section className="room-sec">
         <h4>Sa mission, écrite par Max</h4>
-        <p className="brief">{tidy(a.prompt)}</p>
+        {tech ? <PromptBox prompt={a.prompt} /> : <p className="brief">{tidy(a.prompt)}</p>}
+        {tech && <p className="agent-tech">{agentStats(a)}</p>}
       </section>
       {a.acts.length > 0 && (
         <section className="room-sec">
           <h4>Ce qu’il a fait <span className="count">{plural(a.acts.length, 'action', 'actions')}</span></h4>
-          <ActList acts={a.acts} />
+          {tech ? <TechActs acts={a.acts} /> : <ActList acts={a.acts} />}
         </section>
       )}
       {html && (
@@ -225,7 +229,9 @@ function MachineRoom() {
       <section className="room-sec">
         <h4>Comment ça marche</h4>
         <p className="small">Max est une vraie séance Claude Code, lancée sans fenêtre dans le dossier de la mission. Son équipe, ce sont de vrais sous-agents Claude Code, chacun avec ses consignes et seulement les outils de son métier. Chaque fois qu’un agent utilise un outil (une recherche, une page lue, un fichier écrit), Claude Code le raconte au bureau, qui le montre aussitôt : un robot qui tape, une bulle, un rapport posé sur le bureau du chef.</p>
-        <p className="small muted">Mode restreint : l’équipe ne sort jamais du dossier de la mission, et ni tes réglages ni tes autres agents ne s’invitent dans le bureau.</p>
+        {mission?.project
+          ? <p className="small muted">Mode projet : la séance suit ta config Claude Code (tes réglages et leurs permissions, tes hooks, tes MCP, tes skills, tes agents, le CLAUDE.md du projet). Max commence chaque demande en mode plan : il explore, puis te soumet son plan avant de toucher au code.</p>
+          : <p className="small muted">Mode restreint : l’équipe ne sort jamais du dossier de la mission, et ni tes réglages ni tes autres agents ne s’invitent dans le bureau.</p>}
       </section>
     </Shell>
   );

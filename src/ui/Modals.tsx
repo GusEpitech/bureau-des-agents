@@ -2,7 +2,7 @@
 // les missions précédentes, les réglages, et les petites notifications.
 import { useMemo, useState } from 'react';
 import { sfx } from '../audio/sfx.ts';
-import { savePref, useOffice } from '../state/store.ts';
+import { denseOf, savePref, techOf, useOffice } from '../state/store.ts';
 import { applySound } from '../audio/sound.ts';
 import { FileList } from './Panel.tsx';
 import { fmtDate, fmtDuration, plural, tilde } from './format.ts';
@@ -43,7 +43,7 @@ export function FinalCard() {
       {!replaying && (
         <div className="final-actions">
           <button className="btn" onClick={() => send({ t: 'open', missionId: mission.id })}>Ouvrir le dossier</button>
-          <button className="btn" onClick={() => { close(); useOffice.setState({ draft: ' ' }); }}>Demander une retouche</button>
+          <button className="btn" onClick={() => { close(); useOffice.setState({ draft: ' ' }); }}>Continuer la conversation</button>
           <button className="btn primary" onClick={() => { sfx('click'); close(); send({ t: 'new' }); }}>Nouvelle mission</button>
         </div>
       )}
@@ -126,7 +126,7 @@ export function History() {
   return (
     <div className="modal-back" onClick={close}>
       <div className="modal history" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head"><b>Missions précédentes</b><button className="close" onClick={close} aria-label="Fermer">×</button></div>
+        <div className="modal-head"><b>Mes missions</b><button className="close" onClick={close} aria-label="Fermer">×</button></div>
         <div className="modal-body">
           {connection !== 'live' && <p className="muted">Relie le bureau à Claude Code (npm start) pour retrouver tes missions.</p>}
           {connection === 'live' && !missions.length && <p className="muted">Aucune mission pour l’instant. La première t’attend en bas de l’écran.</p>}
@@ -148,6 +148,7 @@ export function History() {
                 </span>
               </div>
               <div className="row">
+                <button className="btn small primary" title="Rouvre la conversation : son récap, ses fichiers, et tu peux la continuer avec Max" onClick={() => { sfx('click'); send({ t: 'resume', missionId: m.id }); }}>Ouvrir</button>
                 <button className="btn small" title="Rejoue la mission (sans relancer l’équipe) : parfait pour filmer" onClick={() => { sfx('click'); close(); send({ t: 'replay', missionId: m.id }); }}>▶ Rejouer</button>
                 <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: m.id })}>Dossier</button>
               </div>
@@ -170,6 +171,8 @@ export function SettingsPanel() {
   const dir = useOffice((s) => s.dir);
   const voiceOn = useOffice((s) => s.voiceOn);
   const cameraAuto = useOffice((s) => s.cameraAuto);
+  const tech = useOffice(techOf);
+  const dense = useOffice(denseOf);
   if (!open) return null;
   const close = () => useOffice.setState({ settingsOpen: false });
   return (
@@ -195,11 +198,16 @@ export function SettingsPanel() {
             <label className="radio"><input type="radio" checked={settings.permission === 'ask'} onChange={() => send({ t: 'settings', settings: { permission: 'ask' } })} /> Elle demande avant chaque commande</label>
           </div>
           <div className="field">
+            <span>L’affichage</span>
+            <label className="radio"><input type="checkbox" checked={dense} onChange={(e) => { useOffice.setState({ dense: e.target.checked }); savePref('dense', e.target.checked); }} /> Vue développeur : la conversation en grand, le bureau en petit, une interface plus dense (sans son par défaut)</label>
+          </div>
+          <div className="field">
             <span>Le spectacle</span>
             <label className="radio"><input type="checkbox" checked={voiceOn} onChange={(e) => { useOffice.setState({ voiceOn: e.target.checked }); savePref('voice', e.target.checked); applySound(useOffice.getState().sound); }} /> La voix de Max (« C’est parti ! », « Mission accomplie ! », la visite guidée)</label>
+            <label className="radio"><input type="checkbox" checked={tech} onChange={(e) => { useOffice.setState({ tech: e.target.checked }); savePref('tech', e.target.checked); }} /> Le mode technique : les vraies commandes, leurs sorties, les prompts et les tokens (X)</label>
             <label className="radio"><input type="checkbox" checked={cameraAuto} onChange={(e) => { useOffice.setState({ cameraAuto: e.target.checked }); savePref('cameraAuto', e.target.checked); }} /> En mode tournage, la caméra suit l’action toute seule</label>
           </div>
-          <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission (un nouveau dossier, ou celui que tu choisis sous la zone de saisie), et ne lance jamais rien hors du bureau sans te demander.</p>
+          <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission (un nouveau dossier, ou celui que tu choisis sous la zone de saisie), et ne lance jamais rien hors du bureau sans te demander. En mode projet, elle suit ta config Claude Code (tes réglages, tes MCP, tes skills, tes agents), et Max te soumet toujours son plan avant de coder.</p>
           {claude?.found && <p className="small muted">Claude Code {claude.version} · {tilde(dir)}</p>}
           <div className="keys">
             <b>Raccourcis</b>
@@ -210,8 +218,13 @@ export function SettingsPanel() {
             <span><kbd>J</kbd> jukebox</span>
             <span><kbd>N</kbd> jour, soir, nuit</span>
             <span><kbd>M</kbd> son</span>
+            <span><kbd>X</kbd> mode technique</span>
             <span><kbd>H</kbd> missions précédentes</span>
-            <span><kbd>Échap</kbd> fermer, sortir du tournage</span>
+            <span><kbd>D</kbd> vue développeur</span>
+            <span><kbd>O</kbd> replier le bureau (vue développeur)</span>
+            <span><kbd>/</kbd> ou <kbd>Ctrl</kbd>+<kbd>K</kbd> écrire à Max</span>
+            <span><kbd>Alt</kbd>+<kbd>1</kbd>, <kbd>2</kbd>… onglets du panneau</span>
+            <span><kbd>Échap</kbd> fermer, sortir du tournage, arrêter l’équipe</span>
             <span>🥚 Il y a un code secret… (pense aux vieux jeux vidéo)</span>
           </div>
         </div>

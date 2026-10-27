@@ -6,7 +6,7 @@ import { ROLES } from '../../shared/activity.ts';
 import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { projectModeOf, useOffice } from '../state/store.ts';
+import { denseOf, pendingPlanOf, projectModeOf, useOffice } from '../state/store.ts';
 import { tilde } from './format.ts';
 import { tidy } from './tidy.ts';
 import { dictationHelp, useDictation } from './voice.ts';
@@ -99,6 +99,13 @@ function Portrait({ happy }: { happy: boolean }) {
 }
 
 export function Dialog() {
+  // vue développeur : la conversation remplace la boîte de dialogue de Max ; il ne reste que la saisie
+  const dense = useOffice(denseOf);
+  if (dense) return <footer className="dialog"><Composer /></footer>;
+  return <MaxDialog />;
+}
+
+function MaxDialog() {
   const connection = useOffice((s) => s.connection);
   const claude = useOffice((s) => s.claude);
   const mission = useOffice((s) => s.mission);
@@ -139,7 +146,8 @@ export function Dialog() {
 }
 
 export function AskBar() {
-  const asks = useOffice(useShallow((s) => Object.values(s.asks)));
+  // le plan de Max se valide dans la conversation, pas ici
+  const asks = useOffice(useShallow((s) => Object.values(s.asks).filter((a) => a.tool !== 'ExitPlanMode')));
   const agents = useOffice((s) => s.agents);
   const send = useOffice((s) => s.send);
   const a = asks[0];
@@ -168,6 +176,7 @@ function Composer() {
   const draft = useOffice((s) => s.draft);
   const demo = useOffice((s) => s.connection === 'demo');
   const project = useOffice(projectModeOf);
+  const dense = useOffice(denseOf);
   const [text, setText] = useState('');
   const area = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef(text);
@@ -181,20 +190,31 @@ function Composer() {
     setTimeout(() => area.current?.focus(), 30);
   }, [draft]);
 
+  // vue développeur : une seule ligne, qui grandit avec le texte (jusqu'à une dizaine de lignes)
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = '';
+    if (dense) el.style.height = `${Math.min(el.scrollHeight + 2, 220)}px`;
+  }, [text, dense]);
+
   const getBase = useCallback(() => textRef.current, []);
   const dict = useDictation(getBase, setText);
 
+  // un plan de Max attend ta validation : ce que tu tapes part comme remarques sur le plan
+  const plan = useOffice(pendingPlanOf);
   const mode: 'new' | 'steer' | 'retouch' = !mission ? 'new' : busy ? 'steer' : 'retouch';
-  const placeholder = mode === 'new'
+  const placeholder = plan ? 'Tes remarques sur le plan de Max… (ou clique « Valider le plan » dans la conversation)' : mode === 'new'
     ? project ? 'Dis à Max quoi faire dans ton projet… (par exemple : corrige le bug du formulaire de connexion)' : 'Dis à Max ce que tu veux… (par exemple : analyse mes 5 concurrents)'
-    : mode === 'steer' ? 'Une précision pour Max ? Il la lira entre deux étapes.' : 'Demande une retouche à Max… ou lance une nouvelle mission.';
+    : mode === 'steer' ? 'Une précision pour Max ? Il la lira entre deux étapes.' : 'Continue la conversation avec Max (il se souvient de tout)… ou lance une nouvelle mission.';
 
   const submit = () => {
     const t = text.trim();
     if (!t || replaying) return;
     if (dict.listening) dict.stop();
     sfx('send');
-    if (mode === 'new') send({ t: 'start', prompt: t });
+    if (plan) send({ t: 'answer', requestId: plan.requestId, allow: false, message: t });
+    else if (mode === 'new') send({ t: 'start', prompt: t });
     else send({ t: 'say', text: t });
     setText('');
   };
@@ -205,7 +225,7 @@ function Composer() {
         <textarea
           ref={area}
           value={text}
-          rows={2}
+          rows={dense ? 1 : 2}
           placeholder={demo ? 'C’est une démo : la vraie version tourne sur ton ordinateur, avec Claude Code.' : replaying ? 'Rediffusion en cours…' : placeholder}
           disabled={replaying}
           onChange={(e) => setText(e.target.value)}

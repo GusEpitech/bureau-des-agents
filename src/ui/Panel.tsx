@@ -6,7 +6,11 @@ import { roleInfo } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { projectModeOf, teamList, useOffice, type AgentView } from '../state/store.ts';
+import { pendingPlanOf, projectModeOf, savePref, teamList, techOf, useOffice, type AgentView } from '../state/store.ts';
+import { techLabel } from './tech.ts';
+import { PromptBox, TechActs } from './Tech.tsx';
+import { ChatSection } from './Chat.tsx';
+import { DiffSection } from './Diff.tsx';
 import { EXAMPLES, PROJECT_EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
@@ -26,16 +30,53 @@ export function Avatar({ role, size = 32 }: { role: Role; size?: number }) {
 
 const STATUS: Record<AgentView['status'], string> = { working: 'Au travail', reporting: 'Rend son rapport', done: 'A rendu son travail', failed: 'N’a pas pu finir' };
 
+type Tab = 'chat' | 'mission' | 'diff';
+const readTab = (): Tab => {
+  try { const v = localStorage.getItem('bureau:panelTab'); return v === '"mission"' ? 'mission' : v === '"diff"' ? 'diff' : 'chat'; } catch { return 'chat'; }
+};
+
 export function Panel() {
   const mission = useOffice((s) => s.mission);
+  const final = useOffice((s) => s.final);
+  const busy = useOffice((s) => s.busySince !== null);
+  const project = useOffice(projectModeOf);
+  const [picked, setTab] = useState(readTab);
+  // l'onglet « Diff » n'existe qu'en mode projet
+  const tab: Tab = picked === 'diff' && !project ? 'chat' : picked;
+  const pick = (t: Tab) => { setTab(t); savePref('panelTab', t); };
+  // un plan de Max à valider : on ramène la conversation, c'est là qu'il se valide
+  const planId = useOffice((s) => pendingPlanOf(s)?.requestId);
+  useEffect(() => { if (planId) setTab('chat'); }, [planId]);
+  // Alt+1, Alt+2, Alt+3 (App.tsx) : les onglets dans l'ordre (le Diff seulement en mode projet)
+  useEffect(() => {
+    const onTab = (e: Event) => {
+      const tabs: Tab[] = useOffice.getState().mission?.project ? ['chat', 'mission', 'diff'] : ['chat', 'mission'];
+      const t = tabs[(e as CustomEvent<number>).detail];
+      if (t) pick(t);
+    };
+    window.addEventListener('bureau:tab', onTab);
+    return () => window.removeEventListener('bureau:tab', onTab);
+  }, []);
   return (
-    <aside className="panel">
+    <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
       {mission ? (
         <>
-          <PlanSection />
-          <TeamSection />
-          <FilesSection />
-          <FeedSection />
+          <div className="panel-tabs">
+            <div className="seg">
+              <button className={tab === 'chat' ? 'on' : ''} onClick={() => pick('chat')}>💬 Conversation</button>
+              <button className={tab === 'mission' ? 'on' : ''} onClick={() => pick('mission')}>📋 La mission</button>
+              {project && <button className={tab === 'diff' ? 'on' : ''} onClick={() => pick('diff')}>🔀 Diff</button>}
+            </div>
+            {final && !busy && <button className="btn small ghost" title="Le récap de Max et les fichiers" onClick={() => { sfx('open'); useOffice.setState({ showFinal: true }); }}>Récap</button>}
+          </div>
+          {tab === 'chat' ? <ChatSection /> : tab === 'diff' ? <DiffSection /> : (
+            <>
+              <PlanSection />
+              <TeamSection />
+              <FilesSection />
+              <FeedSection />
+            </>
+          )}
         </>
       ) : <Welcome />}
     </aside>
@@ -93,7 +134,8 @@ function Welcome() {
             <div key={m.id} className="mini-mission">
               <div><b>{m.title}</b><span className="small muted">{m.project ? `🛠️ ${m.project} · ` : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {m.files.length} rendu{m.files.length > 1 ? 's' : ''}</span></div>
               <div className="row">
-                <button className="btn small" onClick={() => { sfx('click'); send({ t: 'replay', missionId: m.id }); }}>Rejouer</button>
+                <button className="btn small" title="Rouvre la conversation : son récap, ses fichiers, et tu peux la continuer" onClick={() => { sfx('click'); send({ t: 'resume', missionId: m.id }); }}>Ouvrir</button>
+                <button className="btn small ghost" onClick={() => { sfx('click'); send({ t: 'replay', missionId: m.id }); }}>Rejouer</button>
                 <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: m.id })}>Dossier</button>
               </div>
             </div>
@@ -140,10 +182,23 @@ function TeamSection() {
   );
 }
 
+/** « 12 outils · 48 k tokens · 2 min 10 s » (mode technique). */
+export function agentStats(a: AgentView): string {
+  const tools = a.tools || a.acts.length;
+  const ms = (a.leftAt ?? Date.now()) - a.hiredAt;
+  return [
+    `${tools} outil${tools > 1 ? 's' : ''}`,
+    a.tokens ? `${a.tokens >= 1000 ? `${(a.tokens / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k` : a.tokens} tokens` : '',
+    fmtDuration(ms),
+  ].filter(Boolean).join(' · ');
+}
+
 function AgentCard({ a, open, onToggle }: { a: AgentView; open: boolean; onToggle: () => void }) {
   const role = roleInfo(a.role);
   const working = a.status === 'working' || a.status === 'reporting';
   const report = useMemo(() => (open && a.report ? mdToHtml(a.report) : ''), [open, a.report]);
+  const tech = useOffice(techOf);
+  const now = a.act ? (tech ? tidy(techLabel(a.act.tool, a.act.raw, a.act.detail)) : a.act.label) : 'S’installe à son bureau…';
   return (
     <div className={`agent ${a.status} ${open ? 'open' : ''}`} style={{ ['--c' as string]: role.color }}>
       <button className="agent-head" onClick={onToggle}>
@@ -151,15 +206,22 @@ function AgentCard({ a, open, onToggle }: { a: AgentView; open: boolean; onToggl
         <div className="agent-id">
           <b>{a.name} <span>{role.icon} {role.label}</span></b>
           <span className="agent-task">{a.task}</span>
-          <span className="agent-now">{working ? (a.act?.label ?? 'S’installe à son bureau…') : `${STATUS[a.status]}${a.leftAt ? ` · ${fmtDuration(a.leftAt - a.hiredAt)}` : ''}`}</span>
+          <span className={`agent-now ${tech ? 'mono' : ''}`}>{working ? now : `${STATUS[a.status]}${a.leftAt ? ` · ${fmtDuration(a.leftAt - a.hiredAt)}` : ''}`}</span>
+          {tech && <span className="agent-tech">{agentStats(a)}</span>}
         </div>
         <span className={`agent-status ${a.status}`} />
       </button>
       {open && (
         <div className="agent-more">
           <h4>Sa mission (écrite par Max)</h4>
-          <p className="brief">{a.prompt}</p>
-          {a.acts.length > 0 && (
+          {tech ? <PromptBox prompt={a.prompt} /> : <p className="brief">{a.prompt}</p>}
+          {tech && a.acts.length > 0 && (
+            <>
+              <h4>Ce qu’il a fait</h4>
+              <TechActs acts={a.acts} max={14} />
+            </>
+          )}
+          {!tech && a.acts.length > 0 && (
             <>
               <h4>Ce qu’il a fait</h4>
               <ul className="acts">
@@ -209,6 +271,7 @@ function FilesSection() {
 
 function FeedSection() {
   const feed = useOffice((s) => s.feed);
+  const tech = useOffice(techOf);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { if (box.current) box.current.scrollTop = box.current.scrollHeight; }, [feed.length]);
   return (
@@ -218,7 +281,7 @@ function FeedSection() {
         {feed.slice(-60).map((l) => (
           <div key={l.id} className={`feed-line ${l.kind}`}>
             <span className="feed-time">{new Date(l.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-            <b>{l.who}</b> {tidy(l.kind === 'chef' || l.kind === 'user' ? l.text.slice(0, 220) : l.text)}
+            <b>{l.who}</b> {tech && l.tech ? <code className="feed-tech">{tidy(l.tech)}</code> : tidy(l.kind === 'chef' || l.kind === 'user' ? l.text.slice(0, 220) : l.text)}
           </div>
         ))}
       </div>

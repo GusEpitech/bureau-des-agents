@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { jukebox } from './audio/music.ts';
 import { sfx } from './audio/sfx.ts';
 import { applySound } from './audio/sound.ts';
-import { projectModeOf, savePref, useOffice, type Tod } from './state/store.ts';
+import { denseOf, hasPref, projectModeOf, savePref, techOf, useOffice, type Tod } from './state/store.ts';
 import { AskBar, Dialog } from './ui/Dialog.tsx';
 import { FinalCard, History, SettingsPanel, Toasts, Viewer } from './ui/Modals.tsx';
 import { Office } from './ui/Office.tsx';
@@ -16,6 +16,12 @@ import { startTour, stopTour } from './ui/tour.ts';
 import { TopBar } from './ui/TopBar.tsx';
 
 const KONAMI = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
+
+/** Met le curseur dans la zone de saisie (pour écrire à Max). */
+function focusComposer() {
+  const area = document.querySelector<HTMLTextAreaElement>('.composer textarea');
+  if (area && !area.disabled) area.focus();
+}
 
 const TOD_NEXT: Record<Tod, Tod> = { auto: 'day', day: 'evening', evening: 'night', night: 'auto' };
 
@@ -47,6 +53,19 @@ export function App() {
   const vertical = useOffice((s) => s.vertical || s.portrait);
   const project = useOffice(projectModeOf);
   const filming = useOffice((s) => s.filming);
+  const dense = useOffice(denseOf);
+  const officeHidden = useOffice((s) => denseOf(s) && s.officeHidden);
+
+  // vue développeur : son et voix coupés par défaut (tant que tu ne les as pas réglés toi-même)
+  useEffect(() => {
+    const s = useOffice.getState();
+    const patch: { sound?: boolean; voiceOn?: boolean } = {};
+    if (!hasPref('sound')) patch.sound = !dense;
+    if (!hasPref('voice')) patch.voiceOn = !dense;
+    if ((patch.sound ?? s.sound) === s.sound && (patch.voiceOn ?? s.voiceOn) === s.voiceOn) return;
+    useOffice.setState(patch);
+    applySound(useOffice.getState().sound);
+  }, [dense]);
 
   // sur un écran en hauteur (téléphone), la mise en page verticale s'impose
   useEffect(() => {
@@ -58,11 +77,20 @@ export function App() {
   useEffect(() => {
     let combo: string[] = [];
     const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      // Ctrl+K (ou ⌘K) : écrire à Max, même depuis un autre champ
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && k === 'k') { e.preventDefault(); focusComposer(); return; }
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      // Alt+1, 2, 3 : les onglets du panneau (conversation, mission…)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[1-9]$/.test(e.code)) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('bureau:tab', { detail: Number(e.code.slice(5)) - 1 }));
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const s = useOffice.getState();
-      const k = e.key.toLowerCase();
+      if (k === '/') { e.preventDefault(); focusComposer(); return; }
       // le code secret (↑ ↑ ↓ ↓ ← → ← → B A) : le mode soirée
       combo = [...combo, k].slice(-KONAMI.length);
       if (combo.join() === KONAMI.join()) { combo = []; party(); return; }
@@ -72,9 +100,13 @@ export function App() {
           useOffice.setState({ modal: null, viewer: null, historyOpen: false, settingsOpen: false, showFinal: false });
           return;
         }
-        if (s.filming) useOffice.setState({ filming: false });
+        if (s.filming) { useOffice.setState({ filming: false }); return; }
+        // l'équipe travaille : Échap l'arrête (comme le bouton ■ Arrêter)
+        if (s.busySince !== null && !s.replaying && s.mission) { sfx('click'); s.send({ t: 'stop' }); }
         return;
       }
+      if (k === 'd') { const v = !denseOf(s); useOffice.setState({ dense: v }); savePref('dense', v); sfx('click'); return; }
+      if (k === 'o' && denseOf(s)) { useOffice.setState({ officeHidden: !s.officeHidden }); savePref('officeHidden', !s.officeHidden); sfx('click'); return; }
       if (k === 't') { if (s.tour) stopTour(); else void startTour(); return; }
       if (k === 'c') { useOffice.setState({ cameraAuto: !s.cameraAuto }); savePref('cameraAuto', !s.cameraAuto); sfx('click'); return; }
       if (k === 'j') { jukebox.toggle(); return; }
@@ -83,22 +115,25 @@ export function App() {
       else if (k === 'n') { const n = TOD_NEXT[s.tod]; useOffice.setState({ tod: n }); savePref('tod', n); sfx('click'); }
       else if (k === 'm') { useOffice.setState({ sound: !s.sound }); savePref('sound', !s.sound); applySound(!s.sound); }
       else if (k === 'h') { useOffice.setState({ historyOpen: !s.historyOpen }); sfx('open'); }
+      else if (k === 'x') { const v = !techOf(s); useOffice.setState({ tech: v }); savePref('tech', v); sfx('click'); s.toast('info', v ? 'Mode technique : les vraies commandes et leurs sorties.' : 'Mode technique coupé.'); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   return (
-    <div className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''}`}>
+    <div className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''} ${dense ? 'dense' : ''} ${officeHidden ? 'office-hidden' : ''}`}>
       <div className="frame">
         <TopBar />
         <div className="main">
           <div className="stage">
             <Office />
             {vertical && <Strips />}
-            <AskBar />
-            <FinalCard />
+            {!officeHidden && <AskBar />}
+            {!officeHidden && <FinalCard />}
           </div>
+          {/* bureau replié : les demandes de permission et le récap restent visibles, par-dessus la conversation */}
+          {officeHidden && <div className="stage-float"><AskBar /><FinalCard /></div>}
           {!vertical && !filming && <Panel />}
         </div>
         <Dialog />

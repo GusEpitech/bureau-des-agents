@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { sfx } from '../audio/sfx.ts';
 import { applySound } from '../audio/sound.ts';
 import { replaySpeed, stopReplay } from '../net/link.ts';
-import { projectModeOf, savePref, useOffice, type Tod } from '../state/store.ts';
+import { denseOf, projectModeOf, savePref, useOffice, type Tod } from '../state/store.ts';
 import { fmtClock } from './format.ts';
 import { startTour } from './tour.ts';
 
@@ -44,6 +44,8 @@ export function TopBar() {
   const final = useOffice((s) => s.final);
   const vertical = useOffice((s) => s.vertical);
   const filming = useOffice((s) => s.filming);
+  const dense = useOffice(denseOf);
+  const officeHidden = useOffice((s) => s.officeHidden);
   const sound = useOffice((s) => s.sound);
   const tod = useOffice((s) => s.tod);
   const musicOn = useOffice((s) => s.music.playing);
@@ -108,6 +110,10 @@ export function TopBar() {
             <span className="energy-label">Énergie</span>
             <span className="energy-bar"><i style={{ width: `${Math.max(3, 100 - quota.fiveHour * 100)}%` }} /></span>
           </span>
+        )}
+        {dense && (
+          <button className={`icon-btn ${officeHidden ? 'on' : ''}`} title={officeHidden ? 'Déplier le bureau animé (O)' : 'Replier le bureau animé : la conversation prend toute la place (O)'}
+            onClick={() => { sfx('click'); useOffice.setState({ officeHidden: !officeHidden }); savePref('officeHidden', !officeHidden); }}>{officeHidden ? '🏢' : '⇤'}</button>
         )}
         <button className="icon-btn" title="Visite guidée : Max présente son bureau (T)" onClick={() => void startTour()}>🎤</button>
         <button className="icon-btn" title="Toute l’équipe : les métiers, leurs outils, l’historique" onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'team' } }); }}>👥</button>

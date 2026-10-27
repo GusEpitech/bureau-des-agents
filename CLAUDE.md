@@ -21,9 +21,16 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
   dossier au lieu d'un dossier neuf de `Missions/`. Le serveur crée une branche git `bureau/…` (et refuse si le dépôt a des
   changements pas commités), Max et l'équipe reçoivent des consignes de développement (`projectPrompt`, `PROJECT_TEAM` dans
   `team.ts`, sur les mêmes postes du bureau), et les copies de versions sont coupées (git s'en charge).
+  Le plan est toujours validé : la séance démarre en `--permission-mode plan`, et chaque nouvelle demande la remet en plan
+  (control_request `set_permission_mode`). Max soumet son plan avec ExitPlanMode, qui arrive comme une demande de permission :
+  validé, le bureau autorise puis remet le mode de travail réglé (auto ou acceptEdits) ; refusé, tes remarques partent dans le
+  refus (`answer.message`). Le plan s'affiche dans la conversation (`ChatMsg` kind `plan`), pas dans l'AskBar.
   Côté navigateur, `projectModeOf` (store) pilote l'affichage : `roleInfo()` et `roleSign()` (`shared/activity.ts`) donnent les
   noms des métiers et des écriteaux selon le mode (à utiliser plutôt que `ROLES[r].label`), et `.app.project` passe l'accent
   au turquoise (`--accent-rgb` remplace les `rgba(255, 138, 61, …)`).
+- **La conversation** : le store garde toute la conversation (`chat`, affichée par `src/ui/Chat.tsx`, onglet du panneau). Une
+  mission passée se rouvre (`resume` → `current`) depuis l'enregistrement, et la mission ouverte est rouverte au redémarrage
+  (`currentId` dans l'état) : Max reprend sa séance Claude Code (`--resume`) au message suivant, avec tout son historique.
 - **`shared/protocol.ts`** : tous les messages entre le serveur et le navigateur, et les événements (`OfficeEvent`) : `start`, `hire`,
   `act`, `report`, `leave`, `file`, `ask`, `end`… **`shared/activity.ts`** : les métiers, leurs outils, les textes affichés.
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).
@@ -49,7 +56,8 @@ fournit le rythme de la musique (voir la boucle de `Office.tsx`).
 - **Léger** : la boucle dessine au plus 24 images par seconde en mission, 8 au repos, rien quand l'onglet est caché ; environ une
   milliseconde par image. Pas de 3D, pas de bibliothèque lourde.
 - **Sécurité** : le serveur n'écoute que sur 127.0.0.1 et vérifie l'origine des WebSocket ; l'équipe tourne en `--restricted`, avec
-  seulement les outils de son métier ; les sites créés s'affichent sous `/apercu/` dans un bac à sable (CSP `sandbox`).
+  seulement les outils de son métier, sauf en mode projet, où elle suit ta config Claude Code (réglages, hooks, MCP, skills,
+  agents ; ni `--restricted` ni `--tools`) ; les sites créés s'affichent sous `/apercu/` dans un bac à sable (CSP `sandbox`).
 - **zustand** : un sélecteur qui renvoie un nouveau tableau ou objet passe par `useShallow`, sinon React boucle.
 - **Pas d'image externe** dans le bureau : un nouveau meuble se dessine en code dans `furniture.ts`, avec sa place dans `layout.ts`
   et, s'il est cliquable, une entrée dans `hits.ts` et `interact.ts`.

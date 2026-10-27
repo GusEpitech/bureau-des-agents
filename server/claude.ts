@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { describeAct, NAMES, permissionText, roleOfType, ROLES, cut } from '../shared/activity.ts';
-import type { OfficeEvent, PlanItem, Quota, Role } from '../shared/protocol.ts';
+import type { OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
 
 export interface ClaudeBinary { path: string; version: string }
 
@@ -51,6 +51,11 @@ export interface ProcessOptions {
   /** les consignes du chef, ajoutées à celles de Claude Code */
   appendSystemPrompt: string;
   useApiKey: boolean;
+  /**
+   * mode restreint (missions classiques) : seuls les outils listés, ni réglages ni agents personnels.
+   * Faux en mode projet : la séance suit ta config Claude Code (réglages, hooks, MCP, skills, agents, CLAUDE.md).
+   */
+  restricted: boolean;
 }
 
 type Json = Record<string, any>;
@@ -77,11 +82,11 @@ export class ClaudeProcess {
     const o = this.opts;
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
       '--include-partial-messages', '--permission-prompt-tool', 'stdio', '--permission-mode', o.permissionMode,
-      // mode restreint : seuls les outils listés existent, les outils de fichiers restent dans le dossier
-      // de la mission, et ni tes réglages ni tes agents personnels ne s'invitent dans le bureau
-      '--restricted', '--tools', o.tools.join(','),
       '--agents', o.agents,
       '--append-system-prompt', o.appendSystemPrompt];
+    // mode restreint : seuls les outils listés existent, les outils de fichiers restent dans le dossier
+    // de la mission, et ni tes réglages ni tes agents personnels ne s'invitent dans le bureau
+    if (o.restricted) args.push('--restricted', '--tools', o.tools.join(','));
     if (o.model) args.push('--model', o.model);
     if (o.resume) args.push('--resume', o.resume);
     if (o.allowedTools.length) args.push('--allowedTools', o.allowedTools.join(','));
@@ -90,13 +95,14 @@ export class ClaudeProcess {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       BUREAU_DES_AGENTS: '1',
-      // seule l'équipe du bureau peut être appelée (pas les agents génériques de Claude Code)
-      CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS: '1',
       // les membres de l'équipe n'appellent pas eux-mêmes d'autres agents : c'est le rôle du chef
       CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '1',
       // l'équipe travaille au premier plan : le chef attend les rapports, puis assemble le rendu
       CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
     };
+    // mode restreint : seule l'équipe du bureau peut être appelée (pas les agents génériques de Claude Code).
+    // En mode projet, tes agents et ceux de Claude Code restent disponibles (ils s'affichent en « renfort »).
+    if (o.restricted) env.CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS = '1';
     if (!o.useApiKey) { delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; }
     const p = spawn(o.bin, args, { cwd: o.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc = p;
@@ -129,14 +135,19 @@ export class ClaudeProcess {
     return this.write({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } });
   }
 
-  answerPermission(requestId: string, allow: boolean, input: unknown) {
+  answerPermission(requestId: string, allow: boolean, input: unknown, message?: string) {
     this.write({
       type: 'control_response',
       response: {
         subtype: 'success', request_id: requestId,
-        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: 'Le patron a dit non. Trouve une autre façon de faire, ou demande-lui.' },
+        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: message || 'Le patron a dit non. Trouve une autre façon de faire, ou demande-lui.' },
       },
     });
+  }
+
+  /** Change le mode de permission de la séance en cours (plan, auto, acceptEdits…). */
+  setPermissionMode(mode: string) {
+    this.write({ type: 'control_request', request_id: `mode-${Date.now()}`, request: { subtype: 'set_permission_mode', mode } });
   }
 
   /** Une demande de contrôle qu'on ne sait pas traiter : on répond tout de suite pour ne pas le bloquer. */
@@ -161,7 +172,7 @@ export class ClaudeProcess {
   }
 }
 
-export interface TurnResult { ok: boolean; text: string; ms: number; subtype: string }
+export interface TurnResult { ok: boolean; text: string; ms: number; subtype: string; usage?: TurnUsage }
 
 /**
  * Traduit ce que raconte Claude Code en événements du bureau.
@@ -175,6 +186,7 @@ export class Normalizer {
   private typing = new Map<string, string>();         // texte en cours d'écriture, par agent
   private typingSentAt = new Map<string, number>();
   private pendingInputs = new Map<string, unknown>(); // demandes de permission → entrée de l'outil
+  private pendingTools = new Map<string, string>();   // demandes de permission → nom de l'outil
   /** les membres de l'équipe présents (appelés, pas encore repartis) */
   readonly present = new Set<string>();
   /** qui a écrit quel fichier en dernier (pour attribuer les fichiers du dossier) */
@@ -199,7 +211,8 @@ export class Normalizer {
   }
 
   inputOf(requestId: string) { return this.pendingInputs.get(requestId); }
-  forgetRequest(requestId: string) { this.pendingInputs.delete(requestId); }
+  toolOf(requestId: string) { return this.pendingTools.get(requestId) ?? ''; }
+  forgetRequest(requestId: string) { this.pendingInputs.delete(requestId); this.pendingTools.delete(requestId); }
   hasRequest(requestId: string) { return this.pendingInputs.has(requestId); }
   pendingRequests() { return [...this.pendingInputs.keys()]; }
 
@@ -218,7 +231,7 @@ export class Normalizer {
       case 'user': this.user(m); break;
       case 'result':
         this.typing.clear();
-        this.onResult({ ok: !m.is_error && m.subtype === 'success', text: String(m.result ?? ''), ms: Number(m.duration_ms ?? 0), subtype: String(m.subtype ?? '') });
+        this.onResult({ ok: !m.is_error && m.subtype === 'success', text: String(m.result ?? ''), ms: Number(m.duration_ms ?? 0), subtype: String(m.subtype ?? ''), usage: usageOf(m) });
         break;
       case 'rate_limit_event': {
         const w = m.rate_limit_info?.unifiedWindows ?? {};
@@ -231,6 +244,7 @@ export class Normalizer {
         const tool = String(r.tool_name ?? '');
         const input = (r.input ?? {}) as Record<string, unknown>;
         this.pendingInputs.set(m.request_id, input);
+        this.pendingTools.set(m.request_id, tool);
         const who = (r.tool_use_id && this.whoOfTool.get(r.tool_use_id)) || 'chef';
         const { label, detail, full } = permissionText(tool, input, this.folder);
         this.emit({ k: 'ask', who, requestId: m.request_id, tool, label, detail, full });
@@ -240,7 +254,7 @@ export class Normalizer {
         // Claude Code retire sa demande (interruption, fin de tour) : on range la bulle
         const id = String(m.request_id ?? '');
         if (this.pendingInputs.has(id)) {
-          this.pendingInputs.delete(id);
+          this.forgetRequest(id);
           this.emit({ k: 'ask_done', requestId: id, allow: false, cancelled: true });
         }
         break;
@@ -318,7 +332,7 @@ export class Normalizer {
         } else {
           const { kind, label, detail } = describeAct(name, input);
           if ((name === 'Write' || name === 'Edit' || name === 'MultiEdit') && typeof input.file_path === 'string') this.writers.set(input.file_path, who);
-          this.emit({ k: 'act', who, id: c.id, kind, tool: name, label, detail });
+          this.emit({ k: 'act', who, id: c.id, kind, tool: name, label, detail, raw: clip(compact(input), MAX_RAW) });
         }
       }
     }
@@ -341,9 +355,27 @@ export class Normalizer {
         this.leave(id, !c.is_error && r.status !== 'failed', r.usage ?? { total_tokens: r.totalTokens, tool_uses: r.totalToolUseCount, duration_ms: r.totalDurationMs });
         continue;
       }
-      this.emit({ k: 'act_done', who, id, ok: !c.is_error });
+      this.emit({ k: 'act_done', who, id, ok: !c.is_error, out: clip(textOf(c.content), MAX_OUT) });
     }
   }
+}
+
+// le mode technique : l'entrée et la sortie des outils, tronquées pour ne pas gonfler l'enregistrement
+const MAX_RAW = 2000;
+const MAX_OUT = 4000;
+const clip = (s: string, max: number) => (s.length > max ? s.slice(0, max) + `\n… (${s.length - max} caractères de plus)` : s);
+function compact(v: unknown): string { try { return JSON.stringify(v) ?? ''; } catch { return ''; } }
+
+/** L'usage d'un tour, d'après le message « result » de stream-json. */
+function usageOf(m: Json): TurnUsage | undefined {
+  const u = (m.usage ?? {}) as Json;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const input = n(u.input_tokens), output = n(u.output_tokens);
+  if (input === undefined && output === undefined && n(m.total_cost_usd) === undefined) return undefined;
+  return {
+    input: input ?? 0, output: output ?? 0, cacheRead: n(u.cache_read_input_tokens), cacheWrite: n(u.cache_creation_input_tokens),
+    costUsd: n(m.total_cost_usd), turns: n(m.num_turns),
+  };
 }
 
 function textOf(content: unknown): string {

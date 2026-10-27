@@ -9,7 +9,9 @@ import { jukebox } from '../audio/music.ts';
 import { interact } from './interact.ts';
 import { H, W } from '../engine/layout.ts';
 import { sfx } from '../audio/sfx.ts';
-import { useOffice, type AskView } from '../state/store.ts';
+import { denseOf, techOf, useOffice, type ActView, type AskView } from '../state/store.ts';
+import { techLabel } from './tech.ts';
+import { tidy } from './tidy.ts';
 
 const ICON: Record<ActKind, string> = {
   search: '🔎', web: '🌐', read: '📖', write: '✍️', edit: '✏️', bash: '💻', plan: '📋', skill: '🎓', mcp: '🔌', other: '⚙️',
@@ -105,8 +107,10 @@ export function Office() {
       const dt = (now - last) / 1000;
       last = now;
       if (document.hidden) return;
-      acc += dt;
       const st = useOffice.getState();
+      // vue développeur, bureau replié : on ne dessine rien (le monde reprend où il en était)
+      if (st.officeHidden && denseOf(st)) return;
+      acc += dt;
       // la caméra : le réalisateur filme tout seul en mode tournage (sauf pendant la visite guidée)
       director.enabled = st.filming && st.cameraAuto && !st.tour;
       director.tick();
@@ -221,6 +225,9 @@ function Bubbles() {
   const now = useNow(400);
   const agents = useOffice((s) => s.agents);
   const chef = useOffice((s) => s.chef);
+  const tech = useOffice(techOf);
+  // en mode technique, la vraie commande au lieu du libellé en français
+  const actText = (x: ActView) => (tech ? tidy(techLabel(x.tool, x.raw, x.detail)) : short(x.label));
   const asks = useOffice((s) => s.asks);
   const busy = useOffice((s) => s.busySince !== null);
   const order = useOffice((s) => s.order);
@@ -235,14 +242,14 @@ function Bubbles() {
     const chefActor = world.actors.get('chef');
     if (chefActor) boxes.push({ x: chefActor.x, y: (chefActor.seated && chefActor.seat ? chefActor.seat.y : chefActor.y) - 20, w: 86 });
     const cands = ids.filter((id) => id !== 'chef' && world.actors.get(id)?.seated)
-      .map((id) => ({ id, at: agents[id]?.act?.at ?? 0, label: agents[id]?.act?.label ?? '' }))
+      .map((id) => { const x = agents[id]?.act; return { id, at: x?.at ?? 0, label: x ? actText(x) : '' }; })
       .filter((x) => now - x.at < 2800)
       .sort((a, b) => b.at - a.at);
     for (const c of cands) {
       if (fresh.size >= (vertical ? 2 : 3)) break;
       const a = world.actors.get(c.id)!;
       const lift = Math.round(a.seat!.x / 32) % 2 === 0 ? 12 : 0;
-      const box = { x: a.seat!.x, y: a.seat!.y - 20 - lift, w: Math.min(80, short(c.label).length * 3.1 + 14) };
+      const box = { x: a.seat!.x, y: a.seat!.y - 20 - lift, w: Math.min(80, c.label.length * 3.1 + 14) };
       if (boxes.some((b) => Math.abs(b.x - box.x) < (b.w + box.w) / 2 + 2 && Math.abs(b.y - box.y) < 24)) continue;
       boxes.push(box);
       fresh.add(c.id);
@@ -264,7 +271,7 @@ function Bubbles() {
       const working = order.filter((k) => agents[k]?.status === 'working' || agents[k]?.status === 'reporting').length;
       if (chef.typing) return { ...base, mode: 'full', text: lastSentence(chef.typing, 70) };
       if (chef.say && now - chef.sayAt < 6000) return { ...base, mode: 'full', text: firstSentence(chef.say, 70) };
-      if (chef.act && now - chef.act.at < 5000) return { ...base, mode: 'full', text: short(chef.act.label), icon: ICON[chef.act.kind] };
+      if (chef.act && now - chef.act.at < 5000) return { ...base, mode: 'full', text: actText(chef.act), icon: ICON[chef.act.kind] };
       if (busy && working > 0) return { ...base, mode: 'full', text: `J’attends l’équipe : ${order.length - working} rapport${order.length - working > 1 ? 's' : ''} sur ${order.length}`, icon: '⏳' };
       if (busy) return { ...base, mode: 'full', text: '…' };
       return { ...base, mode: filming ? 'none' : 'tag' };
@@ -273,7 +280,7 @@ function Bubbles() {
     // en marche : juste son nom (avec sa feuille s'il apporte son rapport)
     if (actor.moving || !actor.seated) return { ...base, mode: 'tag', icon: actor.carrying ? '📄' : undefined };
     if (a.act && now - a.act.at < 7000) {
-      return fresh.has(id) ? { ...base, mode: 'full', text: short(a.act.label), icon: ICON[a.act.kind] } : { ...base, mode: 'icon', icon: ICON[a.act.kind] };
+      return fresh.has(id) ? { ...base, mode: 'full', text: actText(a.act), icon: ICON[a.act.kind] } : { ...base, mode: 'icon', icon: ICON[a.act.kind] };
     }
     return { ...base, mode: filming ? 'none' : 'tag' };
   };

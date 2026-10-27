@@ -185,6 +185,8 @@ export function permissionText(tool: string, input: Record<string, unknown> | un
     return { label: `Je peux ${tool === 'Write' ? 'écrire' : 'modifier'} ${inside ? rel : raw} ?`, detail: raw, full: inside && rel.length <= FULL_MAX };
   }
   if (tool === 'WebFetch') return { label: `Je peux lire ${host(i.url)} ?`, detail: String(i.url ?? ''), full: false };
+  // le plan de Max (mode plan) : il s'affiche en entier dans la conversation, pour être validé
+  if (tool === 'ExitPlanMode') return { label: 'Max propose son plan', detail: relToFolder(String(i.plan ?? ''), folder).slice(0, 20000), full: false };
   const detail = relToFolder(JSON.stringify(i, null, 2), folder);
   const clipped = detail.length > 1500 ? detail.slice(0, 1499) + '…' : detail;
   if (tool.startsWith('mcp__')) {

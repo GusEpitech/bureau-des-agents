@@ -10,8 +10,9 @@ import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, w
 import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats } from '../shared/activity.ts';
-import type { ClaudeInfo, FileInfo, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
+import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
 import { ClaudeProcess, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
+import * as gitOps from './git.ts';
 import { agentsJson, ALWAYS_ALLOWED, chefPrompt, SESSION_TOOLS } from './team.ts';
 
 const RULES_FILE = 'Règlement du bureau.md';
@@ -57,7 +58,7 @@ const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'target', '__pyca
 /** Un nom de dossier sûr pour ranger les versions d'un fichier. */
 const versionDirName = (rel: string) => rel.replace(/[\\/]+/g, '__').replace(/[^\w.\-À-ÿ ]+/g, '_').slice(0, 160);
 
-interface State { missions: MissionInfo[]; settings: Settings }
+interface State { missions: MissionInfo[]; settings: Settings; /** la mission ouverte (rouverte au redémarrage du bureau) */ currentId?: string }
 
 interface Live {
   proc: ClaudeProcess;
@@ -81,6 +82,18 @@ interface Current {
   busySince: number | null;
   stopAsked: boolean;
   lastChefText: string;
+  /** ce que le tour en cours a consommé (cumulé si Max reprend la main après l'équipe) */
+  usage?: TurnUsage;
+}
+
+/** Additionne l'usage de deux tours (un tour peut se faire en plusieurs résultats). */
+function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage {
+  if (!a) return b;
+  const sum = (x?: number, y?: number) => (x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0));
+  return {
+    input: a.input + b.input, output: a.output + b.output, cacheRead: sum(a.cacheRead, b.cacheRead), cacheWrite: sum(a.cacheWrite, b.cacheWrite),
+    costUsd: sum(a.costUsd, b.costUsd), turns: sum(a.turns, b.turns),
+  };
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -135,7 +148,7 @@ export class Bureau {
     if (existsSync(this.stateFile)) {
       try {
         const s = JSON.parse(await readFile(this.stateFile, 'utf8')) as Partial<State>;
-        this.state = { missions: Array.isArray(s.missions) ? s.missions : [], settings: { ...DEFAULT_SETTINGS, ...(s.settings ?? {}) } };
+        this.state = { missions: Array.isArray(s.missions) ? s.missions : [], settings: { ...DEFAULT_SETTINGS, ...(s.settings ?? {}) }, currentId: s.currentId };
       } catch { /* état illisible : on repart proprement */ }
     }
     // une mission restée « au travail » (le bureau a été coupé pendant qu'elle tournait) est arrêtée
@@ -143,6 +156,9 @@ export class Bureau {
     // les dossiers récents qui ont disparu sortent de la liste
     const s = this.state.settings;
     s.recent = (Array.isArray(s.recent) ? s.recent : []).filter((d) => typeof d === 'string' && existsSync(d)).slice(0, MAX_RECENT);
+    // la conversation ouverte avant l'arrêt du bureau est toujours là : on peut la continuer
+    const open = this.state.currentId ? this.mission(this.state.currentId) : null;
+    if (open) await this.load(open).catch(() => { this.state.currentId = undefined; });
   }
 
   claudeInfo(): ClaudeInfo {
@@ -258,6 +274,7 @@ export class Bureau {
       status: 'working', stats: emptyStats(), files: [], project, branch: git?.branch, baseBranch: git?.base,
     };
     this.state.missions.push(mission);
+    this.state.currentId = mission.id;
     if (this.state.missions.length > MAX_MISSIONS) this.state.missions.splice(0, this.state.missions.length - MAX_MISSIONS);
     this.save();
     const cur: Current = {
@@ -320,6 +337,8 @@ export class Bureau {
     }
     let l = cur.live;
     if (!l || !l.proc.alive) l = this.spawn(cur);
+    // mode projet : chaque nouvelle demande repasse par un plan à valider (une précision en plein travail, non)
+    else if (this.ownFolder(cur.mission) && cur.mission.status !== 'working') l.proc.setPermissionMode('plan');
     if (cur.idleTimer) { clearTimeout(cur.idleTimer); cur.idleTimer = null; }
     l.lastText = clean;
     cur.stopAsked = false;
@@ -332,6 +351,9 @@ export class Bureau {
     this.record(cur, { k: 'start', text: clean });
     l.proc.send(clean);
   }
+
+  /** Le mode de permission pour travailler (une fois le plan validé, en mode projet). */
+  private workMode() { return this.settings.permission === 'ask' ? 'acceptEdits' : 'auto'; }
 
   private spawn(cur: Current, opts: { fresh?: boolean } = {}): Live {
     if (!this.claude) throw new Error('Claude Code n’est pas installé sur cet ordinateur.');
@@ -347,10 +369,12 @@ export class Bureau {
     });
     const proc: ClaudeProcess = new ClaudeProcess(
       {
-        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: s.permission === 'ask' ? 'acceptEdits' : 'auto',
+        // mode projet : Max commence en mode plan (il explore, puis te soumet son plan avant de coder)
+        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: this.ownFolder(cur.mission) ? 'plan' : this.workMode(),
         model: s.chefModel || undefined, resume, tools: SESSION_TOOLS, allowedTools: ALWAYS_ALLOWED,
         agents: agentsJson(s, this.ownFolder(cur.mission)),
         appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
+        restricted: !this.ownFolder(cur.mission),
       },
       (m) => {
         if (cur.live?.proc !== proc) return; // un ancien processus qui parle encore
@@ -380,6 +404,7 @@ export class Bureau {
 
   private onResult(cur: Current, r: TurnResult) {
     const l = cur.live;
+    if (r.usage) cur.usage = addUsage(cur.usage, r.usage);
     // des membres de l'équipe travaillent encore : Max reprendra la main quand ils auront rendu leur travail
     if (l && l.norm.present.size > 0 && r.ok && !cur.stopAsked) return;
     this.finish(cur, r.ok, r.text.trim() || cur.lastChefText, r.ms, cur.stopAsked);
@@ -403,7 +428,9 @@ export class Bureau {
     // les demandes encore ouvertes n'ont plus d'objet
     const l = cur.live;
     if (l) for (const id of l.norm.pendingRequests()) { l.norm.forgetRequest(id); this.record(cur, { k: 'ask_done', requestId: id, allow: false, cancelled: true }); }
-    this.record(cur, { k: 'end', ok, text: m.final ?? '', ms, stopped });
+    const usage = cur.usage;
+    cur.usage = undefined;
+    this.record(cur, { k: 'end', ok, text: m.final ?? '', ms, stopped, ...(usage ? { usage } : {}) });
     this.broadcast({ t: 'mission', mission: m });
     this.save();
     // Max reste disponible un moment pour les retouches, puis s'endort (il reprendra sa séance si on lui reparle)
@@ -559,13 +586,23 @@ export class Bureau {
     else this.finish(cur, false, cur.lastChefText, 0, true);
   }
 
-  answer(requestId: string, allow: boolean) {
+  answer(requestId: string, allow: boolean, message?: string) {
     const cur = this.current;
     const l = cur?.live;
     if (!cur || !l || !l.norm.hasRequest(requestId)) return;
-    l.proc.answerPermission(requestId, allow, l.norm.inputOf(requestId));
+    const plan = l.norm.toolOf(requestId) === 'ExitPlanMode';
+    const note = message?.trim();
+    // le plan de Max : refusé avec tes remarques, il le corrige et le repropose
+    const deny = plan
+      ? note
+        ? `Ton patron veut des changements au plan : ${note}\nCorrige le plan en tenant compte de ses remarques, puis repropose-le avec ExitPlanMode. N'écris pas encore de code.`
+        : 'Ton patron n’a pas validé le plan. Demande-lui ce qu’il veut changer, sans écrire de code.'
+      : note;
+    l.proc.answerPermission(requestId, allow, l.norm.inputOf(requestId), allow ? undefined : deny);
+    // plan validé : Max quitte le mode plan et travaille avec le mode de permission réglé
+    if (plan && allow) l.proc.setPermissionMode(this.workMode());
     l.norm.forgetRequest(requestId);
-    this.record(cur, { k: 'ask_done', requestId, allow });
+    this.record(cur, { k: 'ask_done', requestId, allow, ...(!allow && note ? { message: note.slice(0, 4000) } : {}) });
   }
 
   /** On range la mission (fin de journée) : le bureau est prêt pour la suivante. */
@@ -578,8 +615,92 @@ export class Bureau {
     cur.watcher?.close();
     if (cur.live) { cur.live.stopping = true; cur.live.proc.stop(); }
     this.current = null;
+    this.state.currentId = undefined;
     this.broadcast({ t: 'closed', missionId: cur.mission.id });
     this.save();
+  }
+
+  // ── Mode projet : le diff et les actions git (voir git.ts) ──
+  private gitBusy = false;
+
+  /** Une mission en mode projet, sinon une erreur claire. */
+  private projectMission(missionId: string) {
+    const m = this.mission(missionId);
+    if (!m) throw new Error('Cette mission n’existe plus.');
+    if (!m.project) throw new Error('Les actions git n’existent qu’en mode projet.');
+    if (!existsSync(m.folder)) throw new Error('Le dossier de cette mission n’existe plus.');
+    return m;
+  }
+
+  async diff(missionId: string) {
+    return gitOps.diff(this.projectMission(missionId));
+  }
+
+  async gitStatus(missionId: string) {
+    return gitOps.status(this.projectMission(missionId));
+  }
+
+  /** Une action git sur la branche de la mission (jamais pendant que l'équipe y travaille). */
+  async gitAction(missionId: string, action: Exclude<GitAction, 'status'>, message: string): Promise<gitOps.ActionResult> {
+    const m = this.projectMission(missionId);
+    const working = this.current?.mission.status === 'working' && this.current.mission.folder === m.folder;
+    if (working) return { ok: false, text: 'L’équipe travaille encore dans ce projet : attends qu’elle ait fini (ou arrête-la).' };
+    if (this.gitBusy) return { ok: false, text: 'Une action git est déjà en cours.' };
+    this.gitBusy = true;
+    try {
+      switch (action) {
+        case 'commit': return await gitOps.commit(m, message);
+        case 'push': return await gitOps.push(m);
+        case 'switch_base': return await gitOps.switchBase(m);
+        case 'delete_branch': return await gitOps.deleteBranch(m);
+      }
+    } finally {
+      this.gitBusy = false;
+    }
+  }
+
+  /**
+   * Rouvre une mission passée : elle redevient la mission en cours, avec sa conversation et ses fichiers.
+   * Rien n'est lancé : Max reprend sa séance (et tout son historique) au prochain message.
+   */
+  async resume(missionId: string) {
+    const m = this.mission(missionId);
+    if (!m) throw new Error('Cette mission n’existe plus.');
+    if (this.current?.mission.id === m.id) {
+      this.broadcast({ t: 'current', mission: m, log: this.current.log });
+      return;
+    }
+    if (this.current?.mission.status === 'working') throw new Error('L’équipe est déjà sur une mission. Attends qu’elle la rende, ou arrête-la.');
+    if (!existsSync(m.folder)) throw new Error('Le dossier de cette mission n’existe plus.');
+    if (this.current) this.close();
+    const cur = await this.load(m);
+    this.state.currentId = m.id;
+    this.save();
+    this.broadcast({ t: 'current', mission: m, log: cur.log });
+  }
+
+  /** Remet une mission en place comme mission en cours, d'après son enregistrement. */
+  private async load(m: MissionInfo): Promise<Current> {
+    const raw = await readFile(path.join(this.recDir, `${m.id}.jsonl`), 'utf8').catch(() => '');
+    const log: Logged[] = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try { log.push(JSON.parse(line) as Logged); } catch { /* ligne coupée */ }
+    }
+    if (log.length > MAX_LOG) log.splice(0, log.length - MAX_LOG);
+    const names = new Set<string>();
+    let lastChefText = '';
+    for (const { ev } of log) {
+      if (ev.k === 'hire') names.add(ev.name);
+      if (ev.k === 'say' && ev.who === 'chef') lastChefText = ev.text;
+    }
+    const cur: Current = {
+      mission: m, log, live: null, names, watcher: null, fileTimers: new Map(), idleTimer: null,
+      busySince: null, stopAsked: false, lastChefText,
+    };
+    this.current = cur;
+    this.watch(cur);
+    return cur;
   }
 
   /** Le chemin d'un fichier de la mission (refusé s'il sort du dossier). */
