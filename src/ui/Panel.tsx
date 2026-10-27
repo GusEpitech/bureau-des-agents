@@ -10,6 +10,7 @@ import { projectModeOf, savePref, teamList, techOf, useOffice, type AgentView } 
 import { techLabel } from './tech.ts';
 import { PromptBox, TechActs } from './Tech.tsx';
 import { ChatSection } from './Chat.tsx';
+import { DiffSection } from './Diff.tsx';
 import { EXAMPLES, PROJECT_EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
@@ -29,14 +30,20 @@ export function Avatar({ role, size = 32 }: { role: Role; size?: number }) {
 
 const STATUS: Record<AgentView['status'], string> = { working: 'Au travail', reporting: 'Rend son rapport', done: 'A rendu son travail', failed: 'N’a pas pu finir' };
 
-const readTab = (): 'chat' | 'mission' => { try { return localStorage.getItem('bureau:panelTab') === '"mission"' ? 'mission' : 'chat'; } catch { return 'chat'; } };
+type Tab = 'chat' | 'mission' | 'diff';
+const readTab = (): Tab => {
+  try { const v = localStorage.getItem('bureau:panelTab'); return v === '"mission"' ? 'mission' : v === '"diff"' ? 'diff' : 'chat'; } catch { return 'chat'; }
+};
 
 export function Panel() {
   const mission = useOffice((s) => s.mission);
   const final = useOffice((s) => s.final);
   const busy = useOffice((s) => s.busySince !== null);
-  const [tab, setTab] = useState(readTab);
-  const pick = (t: 'chat' | 'mission') => { setTab(t); savePref('panelTab', t); };
+  const project = useOffice(projectModeOf);
+  const [picked, setTab] = useState(readTab);
+  // l'onglet « Diff » n'existe qu'en mode projet
+  const tab: Tab = picked === 'diff' && !project ? 'chat' : picked;
+  const pick = (t: Tab) => { setTab(t); savePref('panelTab', t); };
   return (
     <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
       {mission ? (
@@ -45,10 +52,11 @@ export function Panel() {
             <div className="seg">
               <button className={tab === 'chat' ? 'on' : ''} onClick={() => pick('chat')}>💬 Conversation</button>
               <button className={tab === 'mission' ? 'on' : ''} onClick={() => pick('mission')}>📋 La mission</button>
+              {project && <button className={tab === 'diff' ? 'on' : ''} onClick={() => pick('diff')}>🔀 Diff</button>}
             </div>
             {final && !busy && <button className="btn small ghost" title="Le récap de Max et les fichiers" onClick={() => { sfx('open'); useOffice.setState({ showFinal: true }); }}>Récap</button>}
           </div>
-          {tab === 'chat' ? <ChatSection /> : (
+          {tab === 'chat' ? <ChatSection /> : tab === 'diff' ? <DiffSection /> : (
             <>
               <PlanSection />
               <TeamSection />

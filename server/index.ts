@@ -187,6 +187,24 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
     case 'pick_folder':
       await bureau.pickFolder();
       break;
+    case 'diff': {
+      const missionId = str(m.missionId, 40);
+      send({ t: 'diff', missionId, ...(await bureau.diff(missionId)) });
+      break;
+    }
+    case 'git': {
+      const missionId = str(m.missionId, 40);
+      const sendStatus = async () => {
+        try { send({ t: 'git_status', missionId, status: await bureau.gitStatus(missionId) }); }
+        catch (e) { send({ t: 'git_status', missionId, status: null, text: e instanceof Error ? e.message : String(e) }); }
+      };
+      if (m.action === 'status') { await sendStatus(); break; }
+      if (m.action !== 'commit' && m.action !== 'push' && m.action !== 'switch_base' && m.action !== 'delete_branch') break;
+      const r = await bureau.gitAction(missionId, m.action, str(m.message, 5000));
+      send({ t: 'git_done', missionId, action: m.action, ...r });
+      await sendStatus();
+      break;
+    }
   }
 }
 

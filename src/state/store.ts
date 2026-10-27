@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { countStats, emptyStats, setProjectMode } from '../../shared/activity.ts';
 import type {
-  ActKind, ClaudeInfo, ClientMsg, FileInfo, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
+  ActKind, ClaudeInfo, ClientMsg, DiffFile, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
 } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { say } from '../audio/voice.ts';
@@ -120,6 +120,15 @@ interface S {
   tod: Tod;
   draft: string;
   toasts: Toast[];
+  /** mode projet : le diff de la mission (onglet « Diff ») */
+  diff: { ok: boolean; text?: string; note?: string; files: DiffFile[]; truncated: boolean; at: number } | null;
+  diffLoading: boolean;
+  /** mode projet : où en est le dépôt (null : pas encore demandé) */
+  git: { status: GitStatus | null; text?: string } | null;
+  /** l'action git en cours (pour griser les boutons) */
+  gitBusy: GitAction | null;
+  /** le résultat de la dernière action git */
+  gitResult: { action: GitAction; ok: boolean; text: string; url?: string } | null;
   send: (m: ClientMsg) => void;
   receive: (m: ServerMsg) => void;
   apply: (ev: OfficeEvent, at: number, live: boolean) => void;
@@ -181,6 +190,11 @@ export const useOffice = create<S>((set, get) => ({
   tod: pref<Tod>('tod', 'auto'),
   draft: '',
   toasts: [],
+  diff: null,
+  diffLoading: false,
+  git: null,
+  gitBusy: null,
+  gitResult: null,
   send: () => {},
 
   toast: (kind, text) => {
@@ -193,6 +207,7 @@ export const useOffice = create<S>((set, get) => ({
     set({
       mission: m, chef: emptyChef(), agents: {}, order: [], plan: [], files: [], asks: {}, stats: emptyStats(),
       feed: [], chat: [], final: null, busySince: null, workMs: 0, showFinal: false, planHistory: [],
+      diff: null, diffLoading: false, git: null, gitBusy: null, gitResult: null,
     });
     bus.reset();
   },
@@ -251,6 +266,19 @@ export const useOffice = create<S>((set, get) => ({
         break;
       case 'replay':
         // géré par le lecteur (net/replay.ts)
+        break;
+      case 'diff':
+        if (s.mission?.id !== m.missionId) break;
+        set({ diff: { ok: m.ok, text: m.text, note: m.note, files: m.files, truncated: m.truncated, at: Date.now() }, diffLoading: false });
+        break;
+      case 'git_status':
+        if (s.mission?.id !== m.missionId) break;
+        set({ git: { status: m.status, text: m.text } });
+        break;
+      case 'git_done':
+        if (s.mission?.id !== m.missionId) break;
+        set({ gitBusy: null, gitResult: { action: m.action, ok: m.ok, text: m.text, url: m.url } });
+        if (m.ok) sfx(m.action === 'delete_branch' ? 'paper' : 'check');
         break;
     }
   },
