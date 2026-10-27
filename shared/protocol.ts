@@ -47,7 +47,8 @@ export interface MissionInfo {
  */
 export type OfficeEvent =
   | { k: 'start'; text: string }
-  | { k: 'init'; model: string; auth: string }
+  /** `mcp` : les connecteurs MCP chargés dans la séance (état, nombre d'outils) */
+  | { k: 'init'; model: string; auth: string; mcp?: McpServer[] }
   | { k: 'think'; who: string }
   | { k: 'typing'; who: string; text: string }
   | { k: 'say'; who: string; text: string }
@@ -74,6 +75,20 @@ export type OfficeEvent =
 export interface TurnUsage { input: number; output: number; cacheRead?: number; cacheWrite?: number; costUsd?: number; turns?: number }
 
 export interface Logged { at: number; ev: OfficeEvent }
+
+/** Un connecteur MCP de Claude Code, tel qu'on peut le montrer (jamais ses arguments ni ses clés). */
+export interface McpServer {
+  name: string;
+  /** claude.ai : un connecteur de ton compte ; local : configuré sur ton ordinateur ou dans le projet */
+  source: 'claude.ai' | 'local';
+  status: 'ok' | 'auth' | 'pending' | 'disabled' | 'failed';
+  /** l'état tel que Claude Code le dit (Connected, Needs authentication…) */
+  label: string;
+  /** le site (serveur distant) ou le programme (commande locale) */
+  where?: string;
+  /** le nombre d'outils qu'il apporte (connu dans une séance) */
+  tools?: number;
+}
 
 export interface ClaudeInfo { found: boolean; version?: string; path?: string }
 
@@ -174,7 +189,9 @@ export type ClientMsg =
   /** mode projet : le diff de la mission */
   | { t: 'diff'; missionId: string }
   /** mode projet : une action git sur la branche de la mission */
-  | { t: 'git'; missionId: string; action: GitAction; message?: string };
+  | { t: 'git'; missionId: string; action: GitAction; message?: string }
+  /** vérifie les connecteurs MCP (claude mcp list), dans le dossier de la mission ou du projet choisi */
+  | { t: 'mcp_list' };
 
 // ── Serveur → navigateur ──
 export type ServerMsg =
@@ -194,4 +211,6 @@ export type ServerMsg =
   /** mode projet : le diff (ok faux : text explique pourquoi il n'y en a pas) */
   | { t: 'diff'; missionId: string; ok: boolean; text?: string; note?: string; files: DiffFile[]; truncated: boolean }
   | { t: 'git_status'; missionId: string; status: GitStatus | null; text?: string }
-  | { t: 'git_done'; missionId: string; action: GitAction; ok: boolean; text: string; url?: string };
+  | { t: 'git_done'; missionId: string; action: GitAction; ok: boolean; text: string; url?: string }
+  /** les connecteurs MCP vérifiés ; `place` : le dossier où on a vérifié (nom seul), `error` si ça a échoué */
+  | { t: 'mcp_list'; servers: McpServer[]; place: string; at: number; error?: string };

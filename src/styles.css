@@ -56,7 +56,7 @@ button:disabled { cursor: default; opacity: 0.45; }
   border-right: 1px solid var(--line);
   background: #070709;
 }
-.main { display: grid; grid-template-columns: minmax(0, 1fr) 372px; min-height: 0; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 6px 372px; min-height: 0; }
 .app.vertical .main, .app.filming .main { grid-template-columns: minmax(0, 1fr); }
 .stage { position: relative; display: flex; min-width: 0; min-height: 0; }
 
@@ -761,7 +761,7 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 @media (hover: none) { .chat-copy { opacity: 1; } }
 
 /* ── La vue développeur : la conversation en grand, le bureau en petit, tout plus serré ── */
-.app.dense .main { grid-template-columns: minmax(0, 1fr) minmax(420px, 46%); position: relative; }
+.app.dense .main { grid-template-columns: minmax(0, 1fr) 6px minmax(420px, 46%); position: relative; }
 .app.dense.office-hidden .main { grid-template-columns: minmax(0, 1fr); }
 .app.dense.office-hidden .stage { display: none; }
 .app.dense.office-hidden .panel { border-left: 0; align-items: center; }
@@ -808,3 +808,27 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 .branch-input { background: var(--surface2); color: var(--ink); border: 1px solid var(--line2); border-radius: 9px; padding: 8px 10px; font: 500 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .branch-input:focus { outline: none; border-color: rgba(var(--accent-rgb), 0.6); }
 .branch-tokens { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+
+/* Les connecteurs MCP (fenêtre de la machine) */
+.mcp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mcp-head h4 { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.mcp-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.mcp-list li { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: var(--surface2); font-size: 13px; min-width: 0; }
+.mcp-list li span { margin-left: auto; font-size: 12px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mcp-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #ff5d5d; }
+.mcp-list li.ok .mcp-dot { background: var(--green); box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.15); }
+.mcp-list li.auth .mcp-dot, .mcp-list li.pending .mcp-dot { background: #ffc93d; }
+.mcp-list li.disabled .mcp-dot { background: var(--dim); }
+.mcp-tag { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--surface3); color: var(--muted); flex: none; }
+.mcp-error { color: #ff8a8a; }
+
+/* La poignée entre le bureau et le panneau de droite : on la tire pour changer la taille des deux */
+@media (min-width: 761px) {
+  .app .main.sized { grid-template-columns: minmax(0, 1fr) 6px var(--panel-w); }
+}
+.resizer { position: relative; cursor: col-resize; touch-action: none; background: transparent; z-index: 5; }
+.resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; border-radius: 2px; background: var(--line2); transition: background 0.15s, width 0.15s, left 0.15s; }
+.resizer:hover::after, .resizer:focus-visible::after, body.resizing .resizer::after { left: 1px; width: 4px; background: var(--orange); }
+.resizer:focus-visible { outline: none; }
+body.resizing { cursor: col-resize; user-select: none; }
+@media (max-width: 760px) { .resizer { display: none; } }

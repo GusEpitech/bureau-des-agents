@@ -12,6 +12,7 @@ import path from 'node:path';
 import { countStats, emptyStats } from '../shared/activity.ts';
 import { branchName, DEFAULT_BRANCH_PATTERN } from '../shared/branch.ts';
 import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
+import { mcpList } from './mcp.ts';
 import { ClaudeProcess, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
 import * as gitOps from './git.ts';
 import { agentsJson, ALWAYS_ALLOWED, chefPrompt, SESSION_TOOLS } from './team.ts';
@@ -229,6 +230,24 @@ export class Bureau {
     } finally {
       this.picking = false;
     }
+  }
+
+  private mcpChecking: Promise<ServerMsg> | null = null;
+
+  /** Les connecteurs MCP, vérifiés là où l'équipe travaille (la mission ouverte, sinon le projet choisi, sinon le bureau). */
+  mcpList(): Promise<ServerMsg> {
+    if (this.mcpChecking) return this.mcpChecking; // une seule vérification à la fois (elle prend quelques secondes)
+    const cwd = this.current?.mission.folder ?? (this.settings.workdir || this.dir);
+    const place = this.current?.mission.project ?? (this.settings.workdir ? path.basename(this.settings.workdir) : 'le bureau');
+    const at = Date.now();
+    const run = async (): Promise<ServerMsg> => {
+      if (!this.claude) return { t: 'mcp_list', servers: [], place, at, error: 'Claude Code n’est pas installé sur cet ordinateur.' };
+      try { return { t: 'mcp_list', servers: await mcpList(this.claude.path, cwd), place, at }; } catch (e) {
+        return { t: 'mcp_list', servers: [], place, at, error: e instanceof Error ? e.message : String(e) };
+      }
+    };
+    this.mcpChecking = run().finally(() => { this.mcpChecking = null; });
+    return this.mcpChecking;
   }
 
   /** Vrai si la mission travaille dans un dossier choisi par l'utilisateur (et pas dans « Missions »). */

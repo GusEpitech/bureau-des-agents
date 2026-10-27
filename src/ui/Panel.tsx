@@ -11,7 +11,7 @@ import { techLabel } from './tech.ts';
 import { PromptBox, TechActs } from './Tech.tsx';
 import { ChatSection } from './Chat.tsx';
 import { DiffSection } from './Diff.tsx';
-import { EXAMPLES, PROJECT_EXAMPLES } from './Dialog.tsx';
+import { EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
 import { FileActions } from './Rooms.tsx';
@@ -91,31 +91,27 @@ function Welcome() {
   const project = useOffice(projectModeOf);
   return (
     <>
-      <section className="card">
-        <h3>{project ? 'Le mode projet' : 'Comment ça marche'}</h3>
-        {project ? (
-          <ol className="steps">
-            <li><b>Tu dis à Max quoi faire dans ton code</b> : un bug, une fonctionnalité, des tests.</li>
-            <li><b>Il crée une branche git</b> et lit ton projet (son CLAUDE.md, son README).</li>
-            <li><b>L’équipe s’y met</b> : exploration, code, interface, docs, tests.</li>
-            <li><b>Tu relis le diff et tu commites</b> : l’équipe ne commite jamais à ta place.</li>
-          </ol>
-        ) : (
-        <ol className="steps">
-          <li><b>Tu dis à Max ce que tu veux</b>, au clavier ou à la voix.</li>
-          <li><b>Il fait le plan et appelle l’équipe</b> : chacun file à son poste (recherche, code, design, rédaction, analyse).</li>
-          <li><b>Tu les regardes bosser</b>, en vrai : chaque bulle, c’est ce que l’agent fait à cet instant.</li>
-          <li><b>Ils te rendent le travail</b> : les fichiers arrivent dans « Les rendus » et dans ton dossier.</li>
-        </ol>
-        )}
-        <p className="small muted">Ce sont de vrais agents Claude Code, qui tournent avec ton abonnement.</p>
-      </section>
-      <section className="card">
-        <h3>Des idées de mission</h3>
-        <div className="chips col">
-          {(project ? PROJECT_EXAMPLES : EXAMPLES).map((e) => <button key={e.label} className="chip" onClick={() => { sfx('click'); useOffice.setState({ draft: e.prompt }); }}>{e.label}</button>)}
-        </div>
-      </section>
+      {/* en mode projet, pas de mode d'emploi ni d'idées de mission : on va droit à la conversation */}
+      {!project && (
+        <>
+          <section className="card">
+            <h3>Comment ça marche</h3>
+            <ol className="steps">
+              <li><b>Tu dis à Max ce que tu veux</b>, au clavier ou à la voix.</li>
+              <li><b>Il fait le plan et appelle l’équipe</b> : chacun file à son poste (recherche, code, design, rédaction, analyse).</li>
+              <li><b>Tu les regardes bosser</b>, en vrai : chaque bulle, c’est ce que l’agent fait à cet instant.</li>
+              <li><b>Ils te rendent le travail</b> : les fichiers arrivent dans « Les rendus » et dans ton dossier.</li>
+            </ol>
+            <p className="small muted">Ce sont de vrais agents Claude Code, qui tournent avec ton abonnement.</p>
+          </section>
+          <section className="card">
+            <h3>Des idées de mission</h3>
+            <div className="chips col">
+              {EXAMPLES.map((e) => <button key={e.label} className="chip" onClick={() => { sfx('click'); useOffice.setState({ draft: e.prompt }); }}>{e.label}</button>)}
+            </div>
+          </section>
+        </>
+      )}
       {connection === 'live' && (
         <section className="card">
           <h3>Ton bureau</h3>

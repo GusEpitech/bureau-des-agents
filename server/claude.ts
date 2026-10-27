@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { describeAct, NAMES, permissionText, roleOfType, ROLES, cut } from '../shared/activity.ts';
-import type { OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
+import type { McpServer, OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
 
 export interface ClaudeBinary { path: string; version: string }
 
@@ -288,7 +288,7 @@ export class Normalizer {
       case 'init':
         this.started = true;
         this.sessionId = String(m.session_id ?? '');
-        this.emit({ k: 'init', model: String(m.model ?? ''), auth: String(m.apiKeySource ?? '') });
+        this.emit({ k: 'init', model: String(m.model ?? ''), auth: String(m.apiKeySource ?? ''), mcp: mcpOfInit(m) });
         break;
       case 'task_started':
         if (m.task_id && m.tool_use_id) this.agentOfTask.set(m.task_id, m.tool_use_id);
@@ -402,4 +402,24 @@ function textOf(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.map((c: Json) => (c?.type === 'text' ? String(c.text ?? '') : '')).join('\n');
   return '';
+}
+
+/** Les connecteurs MCP de la séance, d'après le message « init » : leur état, et combien d'outils chacun apporte. */
+function mcpOfInit(m: Json): McpServer[] | undefined {
+  if (!Array.isArray(m.mcp_servers)) return undefined;
+  const tools: string[] = Array.isArray(m.tools) ? m.tools.map(String) : [];
+  const norm = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '_');
+  return m.mcp_servers.slice(0, 60).map((x: Json): McpServer => {
+    const raw = String(x?.name ?? '');
+    const cloud = raw.startsWith('claude.ai ');
+    const st = String(x?.status ?? '').toLowerCase();
+    const prefix = `mcp__${norm(raw)}__`;
+    return {
+      name: cloud ? raw.slice('claude.ai '.length) : raw,
+      source: cloud ? 'claude.ai' : 'local',
+      status: st === 'connected' ? 'ok' : st.includes('auth') ? 'auth' : st === 'pending' ? 'pending' : st === 'disabled' ? 'disabled' : 'failed',
+      label: String(x?.status ?? ''),
+      tools: tools.filter((t) => t.startsWith(prefix)).length,
+    };
+  });
 }

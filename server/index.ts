@@ -181,6 +181,9 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
     case 'settings':
       bureau.setSettings(m.settings ?? {});
       break;
+    case 'mcp_list':
+      send(await bureau.mcpList());
+      break;
     case 'resume':
       await bureau.resume(str(m.missionId, 40));
       break;

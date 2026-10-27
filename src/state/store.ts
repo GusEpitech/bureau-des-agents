@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { countStats, emptyStats, setProjectMode } from '../../shared/activity.ts';
 import type {
-  ActKind, ClaudeInfo, ClientMsg, DiffFile, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
+  ActKind, ClaudeInfo, ClientMsg, DiffFile, McpServer, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
 } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { say } from '../audio/voice.ts';
@@ -92,6 +92,9 @@ interface S {
   feed: FeedLine[];
   /** toute la conversation de la mission (pas tronquée, contrairement au fil « En direct ») */
   chat: ChatMsg[];
+  /** les connecteurs MCP : ceux chargés dans la séance (au démarrage de Max), ou la dernière vérification */
+  mcp: { servers: McpServer[]; from: 'session' | 'check'; place?: string; at: number; error?: string } | null;
+  mcpLoading: boolean;
   final: { ok: boolean; text: string; ms: number; stopped?: boolean; at: number } | null;
   /** quand l'équipe s'est mise au travail (pour le chrono) ; null = au repos */
   busySince: number | null;
@@ -116,6 +119,8 @@ interface S {
   dense: boolean | null;
   /** en vue développeur, le bureau animé est replié (la conversation prend toute la largeur) */
   officeHidden: boolean;
+  /** la largeur du panneau de droite, réglée en tirant la poignée (null = la largeur d'origine) */
+  panelW: number | null;
   /** la visite guidée en cours (le texte que Max dit) */
   tour: { step: number; text: string } | null;
   historyOpen: boolean;
@@ -177,6 +182,8 @@ export const useOffice = create<S>((set, get) => ({
   stats: emptyStats(),
   feed: [],
   chat: [],
+  mcp: null,
+  mcpLoading: false,
   final: null,
   busySince: null,
   workMs: 0,
@@ -192,6 +199,7 @@ export const useOffice = create<S>((set, get) => ({
   tech: pref<boolean | null>('tech', null),
   dense: pref<boolean | null>('dense', null),
   officeHidden: pref('officeHidden', false),
+  panelW: (() => { const w = pref<number | null>('panelW', null); return typeof w === 'number' && w >= 240 && w <= 4000 ? w : null; })(),
   tour: null,
   historyOpen: false,
   settingsOpen: false,
@@ -248,6 +256,9 @@ export const useOffice = create<S>((set, get) => ({
       case 'ev':
         if (s.replaying || s.mission?.id !== m.missionId) break;
         get().apply(m.ev, m.at, true);
+        break;
+      case 'mcp_list':
+        set({ mcp: { servers: m.servers, from: 'check', place: m.place, at: m.at, error: m.error }, mcpLoading: false });
         break;
       case 'current':
         if (s.replaying) break;
@@ -315,6 +326,8 @@ export const useOffice = create<S>((set, get) => ({
         break;
       }
       case 'init':
+        // les connecteurs MCP de la séance (plus frais qu'une vérification faite avant)
+        if (ev.mcp && (!s.mcp || s.mcp.from === 'session' || s.mcp.at < at)) set({ mcp: { servers: ev.mcp, from: 'session', at } });
         break;
       case 'think':
         if (ev.who === 'chef') set({ chef: { ...s.chef, thinkingAt: at } });

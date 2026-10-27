@@ -30,26 +30,6 @@ export const EXAMPLES: { label: string; prompt: string }[] = [
   },
 ];
 
-/** Les idées de mission en mode projet : du travail sur ton code. */
-export const PROJECT_EXAMPLES: { label: string; prompt: string }[] = [
-  {
-    label: '🧭 Explique-moi le projet',
-    prompt: 'Explique-moi ce projet : à quoi il sert, comment il est organisé (les dossiers et fichiers clés), comment le lancer et le tester. Envoie un explorateur, puis fais-moi un résumé clair, sans rien modifier.',
-  },
-  {
-    label: '🐛 Corrige un bug',
-    prompt: 'Corrige ce bug : [décris ce qui se passe, et ce qui devrait se passer]. Trouve la cause, corrige-la proprement, ajoute un test qui le prouve, et lance les vérifications du projet.',
-  },
-  {
-    label: '✨ Ajoute une fonctionnalité',
-    prompt: 'Ajoute cette fonctionnalité : [décris-la]. Explore d’abord le code concerné, fais le plan, implémente dans le style du projet, puis fais relire et tester.',
-  },
-  {
-    label: '🧪 Renforce les tests',
-    prompt: 'Repère les parties importantes du projet qui ne sont pas testées, écris les tests qui manquent (dans le style des tests existants) et lance-les. Ne touche pas au code applicatif sauf bug avéré.',
-  },
-];
-
 const stripMd = (s: string) =>
   tidy(s).replace(/```[\s\S]*?```/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_`#>]+/g, '').replace(/^\s*[-•]\s+/gm, '• ').replace(/\n{2,}/g, '\n').trim();
