@@ -1,7 +1,7 @@
 // La mémoire du bureau, côté navigateur : la mission en cours, l'équipe, le plan, les rendus, ce que
 // dit Max. Chaque événement venu du pont est rangé ici, puis transmis au moteur du jeu (les robots).
 import { create } from 'zustand';
-import { countStats, emptyStats } from '../../shared/activity.ts';
+import { countStats, emptyStats, setProjectMode } from '../../shared/activity.ts';
 import type {
   ActKind, ClaudeInfo, ClientMsg, FileInfo, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, VersionInfo,
 } from '../../shared/protocol.ts';
@@ -129,7 +129,7 @@ export const useOffice = create<S>((set, get) => ({
   connection: 'connecting',
   claude: null,
   dir: '',
-  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto' },
+  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [] },
   quota: null,
   missions: [],
   mission: null,
@@ -354,3 +354,10 @@ export const useOffice = create<S>((set, get) => ({
 
 /** Les membres de l'équipe, dans l'ordre où ils sont arrivés. */
 export const teamList = (s: S) => s.order.map((id) => s.agents[id]).filter(Boolean);
+
+/** Mode projet : la mission en cours travaille dans un de tes projets (ou, sans mission, un projet est choisi). */
+export const projectModeOf = (s: S) => (s.mission ? !!s.mission.project : s.connection === 'live' && !!s.settings.workdir);
+
+// le dessin du bureau et les noms des métiers suivent le mode
+setProjectMode(projectModeOf(useOffice.getState()));
+useOffice.subscribe((s) => setProjectMode(projectModeOf(s)));

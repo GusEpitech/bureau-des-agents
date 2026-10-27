@@ -40,8 +40,40 @@ export const TOOL_INFO: Record<string, string> = {
   WebFetch: 'lit une page web', Bash: 'lance une commande',
 };
 
+/** Les écriteaux des coins du bureau. */
+const SIGNS: Record<string, string> = { recherche: 'RECHERCHE', code: 'CODE', design: 'DESIGN', redaction: 'RÉDACTION', analyse: 'ANALYSE', chef: 'CHEF' };
+
+/** Mode projet : les mêmes postes, avec les métiers du code (seul l'affichage change). */
+const PROJECT_ROLES: Partial<Record<Role, Pick<RoleInfo, 'label' | 'icon' | 'type' | 'what'>>> = {
+  chef: { label: 'Chef de projet', icon: '⭐', type: '', what: 'Il lit ta demande et le projet, fait le plan, répartit le travail et vérifie le résultat.' },
+  recherche: { label: 'Exploration', icon: '🧭', type: 'explorateur', what: 'Lit le projet et sa documentation, et rend la carte des fichiers concernés. Ne modifie rien.' },
+  code: { label: 'Code', icon: '💻', type: 'developpeur', what: 'Écrit et modifie le code du projet, puis lance les vérifications.' },
+  design: { label: 'Interface', icon: '🎨', type: 'designer', what: 'Les composants, les styles et la mise en page, dans le style du projet.' },
+  redaction: { label: 'Docs', icon: '📘', type: 'documentaliste', what: 'README, documentation, message de commit proposé.' },
+  analyse: { label: 'Tests', icon: '🧪', type: 'testeur', what: 'Relit le diff, cherche les bugs, lance et écrit les tests.' },
+};
+const PROJECT_SIGNS: Record<string, string> = { ...SIGNS, recherche: 'EXPLORATION', design: 'INTERFACE', redaction: 'DOCS', analyse: 'TESTS' };
+
+// le mode d'affichage du bureau (tenu à jour par le store du navigateur ; le serveur ne s'en sert pas)
+let projectMode = false;
+export function setProjectMode(on: boolean) { projectMode = on; }
+export const isProjectMode = () => projectMode;
+
+/** Le métier tel qu'il s'affiche, selon le mode du bureau. */
+export function roleInfo(role: Role): RoleInfo {
+  const p = projectMode ? PROJECT_ROLES[role] : undefined;
+  return p ? { ...ROLES[role], ...p } : ROLES[role];
+}
+
+/** L'écriteau d'un coin, selon le mode du bureau. */
+export const roleSign = (role: string) => (projectMode ? PROJECT_SIGNS : SIGNS)[role] ?? role.toUpperCase();
+
+/** Mode projet : les agents propres au code, et le poste qu'ils occupent dans le bureau. */
+export const PROJECT_TYPES: Record<string, Role> = { explorateur: 'recherche', testeur: 'analyse', documentaliste: 'redaction' };
+
 /** Le métier d'un agent, d'après le type d'agent que le chef a appelé. */
 export function roleOfType(type: string): Role {
+  if (PROJECT_TYPES[type]) return PROJECT_TYPES[type];
   for (const [role, info] of Object.entries(ROLES) as [Role, RoleInfo][]) if (info.type && info.type === type) return role;
   return 'renfort';
 }

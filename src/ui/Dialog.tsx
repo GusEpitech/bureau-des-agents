@@ -6,7 +6,8 @@ import { ROLES } from '../../shared/activity.ts';
 import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { useOffice } from '../state/store.ts';
+import { projectModeOf, useOffice } from '../state/store.ts';
+import { tilde } from './format.ts';
 import { tidy } from './tidy.ts';
 import { dictationHelp, useDictation } from './voice.ts';
 
@@ -26,6 +27,26 @@ export const EXAMPLES: { label: string; prompt: string }[] = [
   {
     label: '✍️ 3 posts LinkedIn',
     prompt: 'Écris-moi 3 posts LinkedIn sur mon activité, chacun avec une accroche différente, et prépare un visuel de citation en HTML pour le meilleur des trois.',
+  },
+];
+
+/** Les idées de mission en mode projet : du travail sur ton code. */
+export const PROJECT_EXAMPLES: { label: string; prompt: string }[] = [
+  {
+    label: '🧭 Explique-moi le projet',
+    prompt: 'Explique-moi ce projet : à quoi il sert, comment il est organisé (les dossiers et fichiers clés), comment le lancer et le tester. Envoie un explorateur, puis fais-moi un résumé clair, sans rien modifier.',
+  },
+  {
+    label: '🐛 Corrige un bug',
+    prompt: 'Corrige ce bug : [décris ce qui se passe, et ce qui devrait se passer]. Trouve la cause, corrige-la proprement, ajoute un test qui le prouve, et lance les vérifications du projet.',
+  },
+  {
+    label: '✨ Ajoute une fonctionnalité',
+    prompt: 'Ajoute cette fonctionnalité : [décris-la]. Explore d’abord le code concerné, fais le plan, implémente dans le style du projet, puis fais relire et tester.',
+  },
+  {
+    label: '🧪 Renforce les tests',
+    prompt: 'Repère les parties importantes du projet qui ne sont pas testées, écris les tests qui manquent (dans le style des tests existants) et lance-les. Ne touche pas au code applicatif sauf bug avéré.',
   },
 ];
 
@@ -86,11 +107,13 @@ export function Dialog() {
   const chef = useOffice((s) => s.chef);
   const final = useOffice((s) => s.final);
   const tour = useOffice((s) => s.tour);
+  const project = useOffice(projectModeOf);
 
   let text: string;
   if (tour) text = tour.text;
   else if (connection === 'offline') text = 'Je ne suis pas relié à Claude Code. Lance « npm start » dans le dossier du bureau, et on se met au travail.';
   else if (claude && !claude.found) text = 'Je ne trouve pas Claude Code sur cet ordinateur. Installe-le (claude.com/claude-code), connecte-toi, puis relance le bureau.';
+  else if (!mission && project) text = 'Mode projet ! Dis-moi ce qu’il faut faire dans ton code : je lis le projet, je monte l’équipe, et tout reste sur une branche à part.';
   else if (!mission) text = 'Salut ! Moi, c’est Max, le chef du bureau. Dis-moi ce dont tu as besoin : je monte l’équipe, et on s’y met sous tes yeux.';
   else if (chef.typing) text = stripMd(chef.typing);
   else if (final && !busy) text = stripMd(final.text) || (final.ok ? 'C’est prêt !' : 'Mission arrêtée.');
@@ -144,6 +167,7 @@ function Composer() {
   const send = useOffice((s) => s.send);
   const draft = useOffice((s) => s.draft);
   const demo = useOffice((s) => s.connection === 'demo');
+  const project = useOffice(projectModeOf);
   const [text, setText] = useState('');
   const area = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef(text);
@@ -162,7 +186,7 @@ function Composer() {
 
   const mode: 'new' | 'steer' | 'retouch' = !mission ? 'new' : busy ? 'steer' : 'retouch';
   const placeholder = mode === 'new'
-    ? 'Dis à Max ce que tu veux… (par exemple : analyse mes 5 concurrents)'
+    ? project ? 'Dis à Max quoi faire dans ton projet… (par exemple : corrige le bug du formulaire de connexion)' : 'Dis à Max ce que tu veux… (par exemple : analyse mes 5 concurrents)'
     : mode === 'steer' ? 'Une précision pour Max ? Il la lira entre deux étapes.' : 'Demande une retouche à Max… ou lance une nouvelle mission.';
 
   const submit = () => {
@@ -212,9 +236,38 @@ function Composer() {
           <button className="btn ghost" title="Range cette mission et repars de zéro" onClick={() => { sfx('click'); send({ t: 'new' }); }}>＋ Nouvelle mission</button>
         )}
       </div>
+      {mode === 'new' && !demo && !replaying && <FolderPick />}
       {dict.problem && (
         <div className="hint" onClick={dict.clearProblem}>🎙️ {dictationHelp(dict.problem)}</div>
       )}
+    </div>
+  );
+}
+
+/** Où l'équipe va travailler : un nouveau dossier pour la mission, ou un de tes projets (mode projet). */
+function FolderPick() {
+  const workdir = useOffice((s) => s.settings.workdir);
+  const recent = useOffice(useShallow((s) => s.settings.recent));
+  const send = useOffice((s) => s.send);
+  const choose = (v: string) => {
+    sfx('click');
+    if (v === '\0pick') send({ t: 'pick_folder' });
+    else send({ t: 'settings', settings: { workdir: v } });
+  };
+  const name = (d: string) => d.split('/').filter(Boolean).pop() ?? d;
+  return (
+    <div className="folder-pick">
+      <span>{workdir ? '🛠️ Mode projet :' : '📁 L’équipe travaillera dans'}</span>
+      <select value={workdir} title={workdir ? tilde(workdir) : undefined} onChange={(e) => choose(e.target.value)}>
+        <option value="">un nouveau dossier de mission</option>
+        {recent.length > 0 && (
+          <optgroup label="Mes projets">
+            {recent.map((d) => <option key={d} value={d}>{name(d)} · {tilde(d)}</option>)}
+          </optgroup>
+        )}
+        <option value={'\0pick'}>Choisir un autre dossier…</option>
+      </select>
+      {workdir && <span className="small muted">une branche git par mission</span>}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 // la fiche d'un agent (sa mission, chacune de ses actions, son rapport), le plan de Max et son
 // historique, l'équipe et ses outils, la machine, les rendus et l'aperçu des sites créés.
 import { useEffect, useMemo, useState } from 'react';
-import { ROLE_TOOLS, ROLES, TOOL_INFO } from '../../shared/activity.ts';
+import { ROLE_TOOLS, ROLES, roleInfo, TOOL_INFO } from '../../shared/activity.ts';
 import type { PlanItem, Role } from '../../shared/protocol.ts';
 import { jukebox, TRACKS } from '../audio/music.ts';
 import { sfx } from '../audio/sfx.ts';
@@ -56,7 +56,7 @@ function AgentRoom({ id }: { id: string }) {
   const live = world.actors.get(id);
   const html = useMemo(() => (a?.report ? mdToHtml(tidy(a.report)) : ''), [a?.report]);
   if (!a) return <Shell title="Cet agent n’est plus là">Il a quitté le bureau.</Shell>;
-  const role = ROLES[a.role];
+  const role = roleInfo(a.role);
   const working = a.status === 'working' || a.status === 'reporting';
   return (
     <Shell title={<>{a.name}</>} sub={`${role.icon} ${role.label} · ${a.task}`}>
@@ -305,7 +305,7 @@ function TeamRoom({ role }: { role?: Role }) {
             <button key={a.id} className={`who-row ${a.status}`} style={{ ['--c' as string]: ROLES[a.role].color }} onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'agent', id: a.id } }); }}>
               <Avatar role={a.role} size={26} />
               <b>{a.name}</b>
-              <span className="who-task">{ROLES[a.role].icon} {a.task}</span>
+              <span className="who-task">{roleInfo(a.role).icon} {a.task}</span>
               <span className="who-state">{a.status === 'done' ? '✓ rapport rendu' : a.status === 'failed' ? '✕ pas fini' : a.act ? a.act.label : '… au travail'}</span>
             </button>
           ))}
@@ -315,8 +315,8 @@ function TeamRoom({ role }: { role?: Role }) {
         <div className="roles">
           {roles.map((r) => (
             <div key={r} className={`role-card ${role === r ? 'focus' : ''}`} style={{ ['--c' as string]: ROLES[r].color }}>
-              <div className="role-head"><Avatar role={r} size={34} /><div><b>{ROLES[r].icon} {ROLES[r].label}</b><span>{r === 'chef' ? 'Max' : `agent « ${ROLES[r].type} »`} · cerveau : {r === 'chef' ? settings.chefModel || 'par défaut' : settings.teamModel === 'inherit' ? 'comme Max' : settings.teamModel}</span></div>{working(r) > 0 && <em>{working(r)} au travail</em>}</div>
-              <p>{ROLES[r].what}</p>
+              <div className="role-head"><Avatar role={r} size={34} /><div><b>{roleInfo(r).icon} {roleInfo(r).label}</b><span>{r === 'chef' ? 'Max' : `agent « ${roleInfo(r).type} »`} · cerveau : {r === 'chef' ? settings.chefModel || 'par défaut' : settings.teamModel === 'inherit' ? 'comme Max' : settings.teamModel}</span></div>{working(r) > 0 && <em>{working(r)} au travail</em>}</div>
+              <p>{roleInfo(r).what}</p>
               <div className="tools">{ROLE_TOOLS[r].map((t) => <span key={t} title={TOOL_INFO[t] ?? t}>{t}<small>{TOOL_INFO[t] ?? ''}</small></span>)}</div>
             </div>
           ))}
@@ -336,7 +336,7 @@ function TeamRoom({ role }: { role?: Role }) {
                           <button onClick={() => setOpen(open === e.id ? null : e.id)}>
                             <Avatar role={e.role} size={22} />
                             <b>{e.name}</b>
-                            <span>{ROLES[e.role].label} · {e.task}</span>
+                            <span>{roleInfo(e.role).label} · {e.task}</span>
                             <em>{e.status === 'done' ? '✓' : e.status === 'failed' ? '✕' : '…'} {e.ms ? fmtDuration(e.ms) : ''}</em>
                           </button>
                           {open === e.id && e.report && <div className="md small" dangerouslySetInnerHTML={{ __html: mdToHtml(tidy(e.report)) }} />}

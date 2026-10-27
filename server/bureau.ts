@@ -4,8 +4,8 @@
 //   - « .bureau/ » (caché) : l'état du bureau et l'enregistrement de chaque mission (pour la rejouer).
 // Une mission = une séance Claude Code lancée dans le dossier de la mission. On peut lui reparler
 // une fois finie (retouches) : la même séance reprend.
-import { execFile } from 'node:child_process';
-import { existsSync, readFileSync, renameSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
+import { execFile, execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,7 +41,7 @@ Le dossier caché « .bureau » garde l'état du bureau et l'enregistrement de c
 Tu peux le supprimer pour tout recommencer.
 `;
 
-const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto' };
+const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [] };
 const CHEF_MODELS = ['', 'sonnet', 'opus', 'haiku', 'fable'];
 const TEAM_MODELS = ['sonnet', 'haiku', 'opus', 'fable', 'inherit'];
 const IDLE_STOP_MS = 15 * 60 * 1000;
@@ -50,6 +50,9 @@ const MAX_MISSIONS = 300;
 /** au-delà, un fichier n'est pas gardé en version (vidéos, gros exports) */
 const MAX_VERSION_SIZE = 5_000_000;
 const MAX_VERSIONS = 30;
+const MAX_RECENT = 6;
+/** dans un dossier de travail (un projet), ces dossiers bougent tout seuls : on ne les suit pas */
+const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'target', '__pycache__', 'venv', 'vendor']);
 
 /** Un nom de dossier sûr pour ranger les versions d'un fichier. */
 const versionDirName = (rel: string) => rel.replace(/[\\/]+/g, '__').replace(/[^\w.\-À-ÿ ]+/g, '_').slice(0, 160);
@@ -137,6 +140,9 @@ export class Bureau {
     }
     // une mission restée « au travail » (le bureau a été coupé pendant qu'elle tournait) est arrêtée
     for (const m of this.state.missions) if (m.status === 'working') m.status = 'stopped';
+    // les dossiers récents qui ont disparu sortent de la liste
+    const s = this.state.settings;
+    s.recent = (Array.isArray(s.recent) ? s.recent : []).filter((d) => typeof d === 'string' && existsSync(d)).slice(0, MAX_RECENT);
   }
 
   claudeInfo(): ClaudeInfo {
@@ -147,14 +153,68 @@ export class Bureau {
 
   setSettings(p: Partial<Settings>) {
     const cur = this.state.settings;
+    const workdir = typeof p.workdir === 'string' ? this.checkWorkdir(p.workdir) : cur.workdir;
     this.state.settings = {
       chefModel: typeof p.chefModel === 'string' && CHEF_MODELS.includes(p.chefModel) ? p.chefModel : cur.chefModel,
       teamModel: typeof p.teamModel === 'string' && TEAM_MODELS.includes(p.teamModel) ? p.teamModel : cur.teamModel,
       permission: p.permission === 'ask' || p.permission === 'auto' ? p.permission : cur.permission,
+      workdir,
+      // le dernier dossier choisi passe en tête de la liste (le navigateur ne peut pas la modifier)
+      recent: workdir ? [workdir, ...cur.recent.filter((d) => d !== workdir)].slice(0, MAX_RECENT) : cur.recent,
     };
     this.save();
     this.broadcast({ t: 'settings', settings: this.state.settings });
   }
+
+  /** Un dossier de travail acceptable ('' = un nouveau dossier par mission), sinon une erreur claire. */
+  private checkWorkdir(p: string): string {
+    if (!p.trim()) return '';
+    const dir = path.resolve(p.trim());
+    if (!path.isAbsolute(p.trim())) throw new Error('Choisis un dossier avec son chemin complet.');
+    let isDir = false;
+    try { isDir = statSync(dir).isDirectory(); } catch { /* introuvable */ }
+    if (!isDir) throw new Error('Ce dossier n’existe pas.');
+    if (dir === path.parse(dir).root || dir === os.homedir()) throw new Error('Ce dossier est trop large : choisis un dossier précis, pas tout ton ordinateur.');
+    const hidden = path.join(this.dir, '.bureau');
+    if (dir === hidden || dir.startsWith(hidden + path.sep)) throw new Error('Ce dossier appartient au bureau.');
+    return dir;
+  }
+
+  private picking = false;
+
+  /** Ouvre la fenêtre de choix de dossier de l'ordinateur ; le dossier choisi devient le dossier de travail. */
+  async pickFolder() {
+    if (this.picking) return;
+    this.picking = true;
+    try {
+      const start = this.settings.workdir || os.homedir();
+      const title = 'Le dossier où l’équipe va travailler';
+      const tries: [string, string[]][] = process.platform === 'darwin'
+        ? [['osascript', ['-e', `POSIX path of (choose folder with prompt "${title}")`]]]
+        : process.platform === 'win32'
+          ? [['powershell', ['-NoProfile', '-STA', '-Command',
+              `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = '${title.replace(/'/g, "''")}'; $d.SelectedPath = '${start.replace(/'/g, "''")}'; if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }`]]]
+          : [['zenity', ['--file-selection', '--directory', `--title=${title}`, `--filename=${start}/`]],
+             ['kdialog', ['--getexistingdirectory', start, '--title', title]]];
+      for (const [bin, args] of tries) {
+        const r = await new Promise<{ missing: boolean; out: string }>((resolve) => {
+          execFile(bin, args, { encoding: 'utf8' }, (err, stdout) => {
+            const missing = (err as NodeJS.ErrnoException | null)?.code === 'ENOENT';
+            resolve({ missing, out: err ? '' : stdout.trim() });
+          });
+        });
+        if (r.missing) continue;
+        if (r.out) this.setSettings({ workdir: r.out }); // rien de choisi (fenêtre fermée) : on ne change rien
+        return;
+      }
+      throw new Error('Je ne trouve pas de fenêtre de choix de dossier sur cet ordinateur (installe zenity ou kdialog).');
+    } finally {
+      this.picking = false;
+    }
+  }
+
+  /** Vrai si la mission travaille dans un dossier choisi par l'utilisateur (et pas dans « Missions »). */
+  private ownFolder(m: MissionInfo) { return !m.folder.startsWith(this.missionsDir + path.sep); }
 
   missions(): MissionInfo[] {
     return [...this.state.missions].sort((a, b) => b.createdAt - a.createdAt).slice(0, 60);
@@ -181,13 +241,21 @@ export class Bureau {
     const now = new Date();
     const title = titleOf(text);
     const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}h${pad(now.getMinutes())}`;
-    let folder = path.join(this.missionsDir, cleanName(`${stamp} · ${title.replace(/…$/, '')}`).slice(0, 90));
-    for (let n = 2; existsSync(folder); n++) folder = path.join(this.missionsDir, cleanName(`${stamp} · ${title.replace(/…$/, '')} ${n}`).slice(0, 90));
-    await mkdir(folder, { recursive: true });
+    // le dossier de travail choisi, s'il existe encore ; sinon un nouveau dossier dans « Missions »
+    let folder = '';
+    if (this.settings.workdir) {
+      try { folder = this.checkWorkdir(this.settings.workdir); } catch { throw new Error('Le dossier de travail choisi n’existe plus : choisis-en un autre.'); }
+    } else {
+      folder = path.join(this.missionsDir, cleanName(`${stamp} · ${title.replace(/…$/, '')}`).slice(0, 90));
+      for (let n = 2; existsSync(folder); n++) folder = path.join(this.missionsDir, cleanName(`${stamp} · ${title.replace(/…$/, '')} ${n}`).slice(0, 90));
+      await mkdir(folder, { recursive: true });
+    }
+    const project = this.settings.workdir ? path.basename(folder) : undefined;
+    const git = project ? this.gitBranch(folder, `${stamp} ${title}`) : null;
 
     const mission: MissionInfo = {
       id: 'm' + Date.now().toString(36), title, prompt: text, folder, createdAt: Date.now(), workMs: 0,
-      status: 'working', stats: emptyStats(), files: [],
+      status: 'working', stats: emptyStats(), files: [], project, branch: git?.branch, baseBranch: git?.base,
     };
     this.state.missions.push(mission);
     if (this.state.missions.length > MAX_MISSIONS) this.state.missions.splice(0, this.state.missions.length - MAX_MISSIONS);
@@ -202,6 +270,41 @@ export class Bureau {
     this.say(text);
   }
 
+  /**
+   * Mode projet : une branche git pour la mission, pour que le travail de l'équipe reste à part.
+   * Refuse si le dépôt a des changements pas commités (ils se mélangeraient à ceux de l'équipe).
+   * Un dossier qui n'est pas un dépôt git : pas de branche.
+   */
+  private gitBranch(folder: string, label: string): { branch: string; base: string } | null {
+    const git = (...args: string[]) => execFileSync('git', ['-C', folder, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    try {
+      if (git('rev-parse', '--is-inside-work-tree') !== 'true') return null;
+    } catch { return null; } // pas un dépôt git (ou git absent)
+    if (git('status', '--porcelain')) {
+      throw new Error('Ton projet a des changements pas encore commités. Commite-les (ou mets-les de côté avec « git stash »), puis relance : l’équipe travaillera sur sa propre branche.');
+    }
+    let base = '';
+    try { base = git('symbolic-ref', '--short', 'HEAD'); } catch { base = git('rev-parse', '--short', 'HEAD'); }
+    const slug = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).replace(/-+$/, '');
+    let branch = `bureau/${slug || 'mission'}`;
+    for (let n = 2; this.gitHas(git, branch); n++) branch = `bureau/${slug || 'mission'}-${n}`;
+    try { git('switch', '-c', branch); } catch {
+      try { git('checkout', '-b', branch); } catch (e) {
+        throw new Error(`Je n’arrive pas à créer la branche ${branch} : ${e instanceof Error ? e.message.split('\n').pop() : e}`);
+      }
+    }
+    return { branch, base };
+  }
+
+  private gitHas(git: (...a: string[]) => string, branch: string) {
+    try { git('rev-parse', '--verify', '--quiet', `refs/heads/${branch}`); return true; } catch { return false; }
+  }
+
+  /** La branche git actuelle du dossier (null si ce n'est pas un dépôt). */
+  private currentBranch(folder: string): string | null {
+    try { return execFileSync('git', ['-C', folder, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; }
+  }
+
   /** Parler à Max : la mission, puis les retouches. S'il s'était endormi, il reprend sa séance. */
   say(text: string) {
     const cur = this.current;
@@ -209,6 +312,12 @@ export class Bureau {
     const clean = text.trim();
     if (!clean) return;
     if (!this.claude) throw new Error('Claude Code n’est pas installé sur cet ordinateur.');
+    // une retouche sur une autre branche que celle de la mission mélangerait les travaux
+    const branch = cur.mission.branch;
+    if (branch && cur.mission.status !== 'working') {
+      const now = this.currentBranch(cur.mission.folder);
+      if (now !== branch) throw new Error(`Ton projet n’est plus sur la branche de la mission (${branch}). Reviens dessus pour une retouche, ou lance une nouvelle mission.`);
+    }
     let l = cur.live;
     if (!l || !l.proc.alive) l = this.spawn(cur);
     if (cur.idleTimer) { clearTimeout(cur.idleTimer); cur.idleTimer = null; }
@@ -240,7 +349,8 @@ export class Bureau {
       {
         bin: this.claude.path, cwd: cur.mission.folder, permissionMode: s.permission === 'ask' ? 'acceptEdits' : 'auto',
         model: s.chefModel || undefined, resume, tools: SESSION_TOOLS, allowedTools: ALWAYS_ALLOWED,
-        agents: agentsJson(s), appendSystemPrompt: chefPrompt(readRules(this.dir)), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
+        agents: agentsJson(s, this.ownFolder(cur.mission)),
+        appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
       },
       (m) => {
         if (cur.live?.proc !== proc) return; // un ancien processus qui parle encore
@@ -347,7 +457,7 @@ export class Bureau {
       cur.watcher = watch(folder, { recursive: true }, (_type, name) => {
         if (!name) return;
         const rel = String(name);
-        if (rel.split(path.sep).some((p) => p.startsWith('.') || p === 'node_modules')) return;
+        if (rel.split(path.sep).some((p) => p.startsWith('.') || IGNORED_DIRS.has(p))) return;
         const prev = cur.fileTimers.get(rel);
         if (prev) clearTimeout(prev);
         cur.fileTimers.set(rel, setTimeout(() => { cur.fileTimers.delete(rel); void this.fileChanged(cur, rel); }, 350));
@@ -371,7 +481,8 @@ export class Bureau {
     if (i >= 0) files[i] = file; else files.push(file);
     this.record(cur, { k: 'file', file, isNew: i < 0 });
     this.save();
-    if (st.size <= MAX_VERSION_SIZE) void this.keepVersion(cur.mission.id, rel, abs, st.mtimeMs, file.by);
+    // en mode projet, git garde déjà l'historique : pas de copies en double
+    if (st.size <= MAX_VERSION_SIZE && !this.ownFolder(cur.mission)) void this.keepVersion(cur.mission.id, rel, abs, st.mtimeMs, file.by);
   }
 
   /** Garde une copie de chaque version d'un rendu (l'historique des versions). */

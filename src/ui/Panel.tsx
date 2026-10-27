@@ -2,12 +2,12 @@
 // les rendus (les fichiers produits) et le fil de ce qui se passe. Sans mission : comment ça marche.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { ROLES } from '../../shared/activity.ts';
+import { roleInfo } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { teamList, useOffice, type AgentView } from '../state/store.ts';
-import { EXAMPLES } from './Dialog.tsx';
+import { projectModeOf, teamList, useOffice, type AgentView } from '../state/store.ts';
+import { EXAMPLES, PROJECT_EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
 import { FileActions } from './Rooms.tsx';
@@ -47,22 +47,32 @@ function Welcome() {
   const dir = useOffice((s) => s.dir);
   const send = useOffice((s) => s.send);
   const connection = useOffice((s) => s.connection);
+  const project = useOffice(projectModeOf);
   return (
     <>
       <section className="card">
-        <h3>Comment ça marche</h3>
+        <h3>{project ? 'Le mode projet' : 'Comment ça marche'}</h3>
+        {project ? (
+          <ol className="steps">
+            <li><b>Tu dis à Max quoi faire dans ton code</b> : un bug, une fonctionnalité, des tests.</li>
+            <li><b>Il crée une branche git</b> et lit ton projet (son CLAUDE.md, son README).</li>
+            <li><b>L’équipe s’y met</b> : exploration, code, interface, docs, tests.</li>
+            <li><b>Tu relis le diff et tu commites</b> : l’équipe ne commite jamais à ta place.</li>
+          </ol>
+        ) : (
         <ol className="steps">
           <li><b>Tu dis à Max ce que tu veux</b>, au clavier ou à la voix.</li>
           <li><b>Il fait le plan et appelle l’équipe</b> : chacun file à son poste (recherche, code, design, rédaction, analyse).</li>
           <li><b>Tu les regardes bosser</b>, en vrai : chaque bulle, c’est ce que l’agent fait à cet instant.</li>
           <li><b>Ils te rendent le travail</b> : les fichiers arrivent dans « Les rendus » et dans ton dossier.</li>
         </ol>
+        )}
         <p className="small muted">Ce sont de vrais agents Claude Code, qui tournent avec ton abonnement.</p>
       </section>
       <section className="card">
         <h3>Des idées de mission</h3>
         <div className="chips col">
-          {EXAMPLES.map((e) => <button key={e.label} className="chip" onClick={() => { sfx('click'); useOffice.setState({ draft: e.prompt }); }}>{e.label}</button>)}
+          {(project ? PROJECT_EXAMPLES : EXAMPLES).map((e) => <button key={e.label} className="chip" onClick={() => { sfx('click'); useOffice.setState({ draft: e.prompt }); }}>{e.label}</button>)}
         </div>
       </section>
       {connection === 'live' && (
@@ -81,7 +91,7 @@ function Welcome() {
           <h3>Dernières missions</h3>
           {missions.slice(0, 4).map((m) => (
             <div key={m.id} className="mini-mission">
-              <div><b>{m.title}</b><span className="small muted">{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {m.files.length} rendu{m.files.length > 1 ? 's' : ''}</span></div>
+              <div><b>{m.title}</b><span className="small muted">{m.project ? `🛠️ ${m.project} · ` : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {m.files.length} rendu{m.files.length > 1 ? 's' : ''}</span></div>
               <div className="row">
                 <button className="btn small" onClick={() => { sfx('click'); send({ t: 'replay', missionId: m.id }); }}>Rejouer</button>
                 <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: m.id })}>Dossier</button>
@@ -131,7 +141,7 @@ function TeamSection() {
 }
 
 function AgentCard({ a, open, onToggle }: { a: AgentView; open: boolean; onToggle: () => void }) {
-  const role = ROLES[a.role];
+  const role = roleInfo(a.role);
   const working = a.status === 'working' || a.status === 'reporting';
   const report = useMemo(() => (open && a.report ? mdToHtml(a.report) : ''), [open, a.report]);
   return (
@@ -185,9 +195,14 @@ function FilesSection() {
   const replaying = useOffice((s) => s.replaying);
   return (
     <section className="card">
-      <h3>Les rendus <span className="count">{files}</span></h3>
-      {files ? <FileList /> : <p className="small muted">Les fichiers de l’équipe arriveront ici (et dans le dossier de la mission).</p>}
-      {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>Ouvrir le dossier de la mission</button>}
+      <h3>{mission?.project ? 'Les fichiers modifiés' : 'Les rendus'} <span className="count">{files}</span></h3>
+      {mission?.project && (
+        <p className="small muted">
+          🛠️ {mission.project}{mission.branch ? <> · 🌿 <code>{mission.branch}</code> (partie de <code>{mission.baseBranch}</code>)</> : ' · pas de dépôt git'}
+        </p>
+      )}
+      {files ? <FileList /> : <p className="small muted">{mission?.project ? 'Les fichiers que l’équipe modifie arriveront ici.' : 'Les fichiers de l’équipe arriveront ici (et dans le dossier de la mission).'}</p>}
+      {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir le projet' : 'Ouvrir le dossier de la mission'}</button>}
     </section>
   );
 }

@@ -8,7 +8,7 @@ import { BOARD, CLOCK, FURNITURE, H, NEON, T, W, WINDOWS, type Furn } from './la
 import { g2d, makeCanvas, P, rgba, rng, type G } from './pixels.ts';
 import { ANCHOR_X, ANCHOR_Y, robotSprite } from './robots.ts';
 import { drawRoom, neon, signs, type TimeOfDay } from './room.ts';
-import { ROLES } from '../../shared/activity.ts';
+import { isProjectMode, ROLES } from '../../shared/activity.ts';
 import type { Actor, World } from './world.ts';
 
 interface Placed { f: Furn; c: HTMLCanvasElement; x: number; y: number; sortY: number }
@@ -50,7 +50,8 @@ export class Renderer {
     this.clockHands(g, now);
     this.board(g, world, t);
     // le néon (sa couleur change quand on clique dessus ; il grésille de temps en temps)
-    const [tube, core] = NEON_COLORS[world.neonIndex];
+    // en mode projet, le néon orange d'origine passe au turquoise (comme le reste du bureau)
+    const [tube, core] = world.neonIndex === 0 && isProjectMode() ? ['#2ed3b7', '#b6f7ec'] : NEON_COLORS[world.neonIndex];
     if (Math.sin(t * 0.9) <= 0.985) neon(g, tube, core);
     // les écriteaux : le nom du coin, et combien d'agents y travaillent en ce moment
     const busy = new Map<string, number>();
