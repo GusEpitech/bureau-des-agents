@@ -64,7 +64,8 @@ export type OfficeEvent =
   | { k: 'file'; file: FileInfo; isNew: boolean }
   /** full = la bulle montre l'action en entier (sinon, on répond dans le panneau, où tout est affiché) */
   | { k: 'ask'; who: string; requestId: string; tool: string; label: string; detail: string; full: boolean }
-  | { k: 'ask_done'; requestId: string; allow: boolean; cancelled?: boolean }
+  /** `message` : ce que tu as répondu avec un refus (tes remarques sur le plan de Max) */
+  | { k: 'ask_done'; requestId: string; allow: boolean; cancelled?: boolean; message?: string }
   | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean; usage?: TurnUsage }
   | { k: 'error'; message: string };
 
@@ -152,7 +153,8 @@ export type ClientMsg =
   | { t: 'start'; prompt: string }
   | { t: 'say'; text: string }
   | { t: 'stop' }
-  | { t: 'answer'; requestId: string; allow: boolean }
+  /** répondre à une demande de permission ; `message` accompagne un refus (par exemple tes remarques sur le plan de Max) */
+  | { t: 'answer'; requestId: string; allow: boolean; message?: string }
   | { t: 'new' }
   | { t: 'open'; missionId: string; file?: string }
   /** ouvre le dossier du bureau (ou son règlement) */

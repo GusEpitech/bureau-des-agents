@@ -229,7 +229,9 @@ function MachineRoom() {
       <section className="room-sec">
         <h4>Comment ça marche</h4>
         <p className="small">Max est une vraie séance Claude Code, lancée sans fenêtre dans le dossier de la mission. Son équipe, ce sont de vrais sous-agents Claude Code, chacun avec ses consignes et seulement les outils de son métier. Chaque fois qu’un agent utilise un outil (une recherche, une page lue, un fichier écrit), Claude Code le raconte au bureau, qui le montre aussitôt : un robot qui tape, une bulle, un rapport posé sur le bureau du chef.</p>
-        <p className="small muted">Mode restreint : l’équipe ne sort jamais du dossier de la mission, et ni tes réglages ni tes autres agents ne s’invitent dans le bureau.</p>
+        {mission?.project
+          ? <p className="small muted">Mode projet : la séance suit ta config Claude Code (tes réglages et leurs permissions, tes hooks, tes MCP, tes skills, tes agents, le CLAUDE.md du projet). Max commence chaque demande en mode plan : il explore, puis te soumet son plan avant de toucher au code.</p>
+          : <p className="small muted">Mode restreint : l’équipe ne sort jamais du dossier de la mission, et ni tes réglages ni tes autres agents ne s’invitent dans le bureau.</p>}
       </section>
     </Shell>
   );

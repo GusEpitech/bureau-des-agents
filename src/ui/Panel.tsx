@@ -6,7 +6,7 @@ import { roleInfo } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { projectModeOf, savePref, teamList, techOf, useOffice, type AgentView } from '../state/store.ts';
+import { pendingPlanOf, projectModeOf, savePref, teamList, techOf, useOffice, type AgentView } from '../state/store.ts';
 import { techLabel } from './tech.ts';
 import { PromptBox, TechActs } from './Tech.tsx';
 import { ChatSection } from './Chat.tsx';
@@ -44,6 +44,9 @@ export function Panel() {
   // l'onglet « Diff » n'existe qu'en mode projet
   const tab: Tab = picked === 'diff' && !project ? 'chat' : picked;
   const pick = (t: Tab) => { setTab(t); savePref('panelTab', t); };
+  // un plan de Max à valider : on ramène la conversation, c'est là qu'il se valide
+  const planId = useOffice((s) => pendingPlanOf(s)?.requestId);
+  useEffect(() => { if (planId) setTab('chat'); }, [planId]);
   return (
     <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
       {mission ? (
