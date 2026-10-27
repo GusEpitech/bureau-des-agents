@@ -255,10 +255,11 @@ button:disabled { cursor: default; opacity: 0.45; }
 .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: transparent; font-size: 15px; display: grid; place-items: center; }
 .icon-btn:hover { background: var(--surface2); border-color: var(--line); }
 .icon-btn.on { background: rgba(var(--accent-rgb), 0.14); border-color: rgba(var(--accent-rgb), 0.4); }
-.energy { display: flex; align-items: center; gap: 6px; margin-right: 6px; }
+.energy { display: flex; align-items: center; gap: 6px; margin-right: 6px; background: none; border: 0; padding: 2px 4px; border-radius: 8px; color: inherit; cursor: pointer; }
+.energy:hover { background: var(--surface2); }
 .energy-label { font-size: 11px; color: var(--muted); }
-.energy-bar { width: 54px; height: 7px; border-radius: 4px; background: var(--surface3); overflow: hidden; }
-.energy-bar i { display: block; height: 100%; background: var(--grad); border-radius: 4px; }
+.energy-bar { position: relative; flex: none; width: 54px; min-width: 54px; height: 7px; border-radius: 4px; background: var(--surface3); overflow: hidden; }
+.energy-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--grad); border-radius: 4px; }
 .replay-bar { display: flex; align-items: center; gap: 4px; font: 600 12px var(--pixel); color: #15121d; background: var(--grad); padding: 3px 4px 3px 10px; border-radius: 8px; flex: none; }
 .replay-bar button { border: 0; border-radius: 6px; background: rgba(0, 0, 0, 0.16); padding: 2px 7px; font-size: 12px; color: #15121d; }
 
@@ -485,7 +486,8 @@ button:disabled { cursor: default; opacity: 0.45; }
 .md code { font-size: 12px; background: var(--surface3); padding: 1px 4px; border-radius: 4px; }
 .md pre { background: #08080b; padding: 10px; border-radius: 8px; overflow: auto; }
 .md table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin: 8px 0; display: block; overflow-x: auto; }
-.md th, .md td { border: 1px solid var(--line2); padding: 5px 7px; text-align: left; vertical-align: top; }
+.md th, .md td { border: 1px solid var(--line2); padding: 5px 7px; text-align: left; vertical-align: top; overflow-wrap: break-word; min-width: 11ch; }
+.md td code, .md th code { overflow-wrap: anywhere; }
 .md th { background: var(--surface3); }
 .md blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--orange); color: var(--muted); }
 
@@ -733,10 +735,10 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 .diff-card.big { width: min(1200px, 96vw); height: min(880px, 92vh); overflow-y: auto; }
 .diff-card.big .diff-patch { max-height: none; }
 /* Le plan de Max à valider (mode projet) */
-.chat-msg.plan { max-width: 100%; align-self: stretch; }
-.chat-msg.plan .chat-bubble { border-color: rgba(var(--accent-rgb), 0.45); }
-.chat-msg.plan.pending .chat-bubble { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1); }
-.chat-msg.plan.cancelled .chat-bubble, .chat-msg.plan.changes .chat-bubble { opacity: 0.7; }
+.chat-msg.plan-msg { max-width: 100%; align-self: stretch; }
+.chat-msg.plan-msg .chat-bubble { border-color: rgba(var(--accent-rgb), 0.45); }
+.chat-msg.plan-msg.pending .chat-bubble { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1); }
+.chat-msg.plan-msg.cancelled .chat-bubble, .chat-msg.plan-msg.changes .chat-bubble { opacity: 0.7; }
 .chat-who em.plan-state { background: rgba(var(--accent-rgb), 0.15); color: var(--orange2); }
 .chat-who em.plan-state.approved { background: rgba(61, 220, 151, 0.15); color: var(--green); }
 .chat-who em.plan-state.cancelled { background: rgba(255, 255, 255, 0.06); color: var(--dim); }
@@ -832,3 +834,18 @@ select.versions { background: var(--surface2); color: var(--ink); border: 1px so
 .resizer:focus-visible { outline: none; }
 body.resizing { cursor: col-resize; user-select: none; }
 @media (max-width: 760px) { .resizer { display: none; } }
+
+/* Un cerveau par métier (Réglages) */
+.role-models { display: grid; gap: 6px; }
+.role-models label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.role-models b { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.role-models select { flex: 0 1 230px; min-width: 0; background: var(--surface2); color: var(--ink); border: 1px solid var(--line2); border-radius: 9px; padding: 6px 8px; font: inherit; font-size: 13px; }
+
+/* La jauge d'énergie : couleur selon ce qui reste, et un clic la mesure */
+.energy-pct { font: 600 11px var(--pixel); color: var(--muted); min-width: 28px; text-align: right; }
+.energy.mid .energy-bar i { background: #ffc93d; }
+.energy.low .energy-bar i { background: #ff5d5d; }
+.energy.low .energy-pct { color: #ff8a8a; }
+.energy.unknown .energy-label { color: var(--dim); }
+.energy.measuring .energy-bar { animation: pulse-red 1s infinite; }
+.energy-bar i { transition: width 0.6s ease; }

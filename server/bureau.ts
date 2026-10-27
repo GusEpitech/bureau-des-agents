@@ -13,7 +13,7 @@ import { countStats, emptyStats } from '../shared/activity.ts';
 import { branchName, DEFAULT_BRANCH_PATTERN } from '../shared/branch.ts';
 import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
 import { mcpList } from './mcp.ts';
-import { ClaudeProcess, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
+import { ClaudeProcess, freshQuota, measureQuota, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
 import * as gitOps from './git.ts';
 import { agentsJson, ALWAYS_ALLOWED, chefPrompt, SESSION_TOOLS } from './team.ts';
 
@@ -44,9 +44,20 @@ Le dossier caché « .bureau » garde l'état du bureau et l'enregistrement de c
 Tu peux le supprimer pour tout recommencer.
 `;
 
-const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN };
+const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN };
 const CHEF_MODELS = ['', 'sonnet', 'opus', 'haiku', 'fable'];
 const TEAM_MODELS = ['sonnet', 'haiku', 'opus', 'fable', 'inherit'];
+const MODEL_ROLES: Role[] = ['recherche', 'code', 'design', 'redaction', 'analyse'];
+
+/** Les modèles par métier : seulement des métiers connus et des modèles connus (le reste est écarté). */
+function cleanRoleModels(v: Partial<Record<Role, unknown>>): Partial<Record<Role, string>> {
+  const out: Partial<Record<Role, string>> = {};
+  for (const r of MODEL_ROLES) {
+    const m = v[r];
+    if (typeof m === 'string' && TEAM_MODELS.includes(m)) out[r] = m;
+  }
+  return out;
+}
 const IDLE_STOP_MS = 15 * 60 * 1000;
 const MAX_LOG = 8000;
 const MAX_MISSIONS = 300;
@@ -60,7 +71,7 @@ const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'target', '__pyca
 /** Un nom de dossier sûr pour ranger les versions d'un fichier. */
 const versionDirName = (rel: string) => rel.replace(/[\\/]+/g, '__').replace(/[^\w.\-À-ÿ ]+/g, '_').slice(0, 160);
 
-interface State { missions: MissionInfo[]; settings: Settings; /** la mission ouverte (rouverte au redémarrage du bureau) */ currentId?: string }
+interface State { missions: MissionInfo[]; settings: Settings; /** le dernier quota mesuré (gardé d'un lancement à l'autre) */ quota?: Quota | null; /** la mission ouverte (rouverte au redémarrage du bureau) */ currentId?: string }
 
 interface Live {
   proc: ClaudeProcess;
@@ -150,7 +161,8 @@ export class Bureau {
     if (existsSync(this.stateFile)) {
       try {
         const s = JSON.parse(await readFile(this.stateFile, 'utf8')) as Partial<State>;
-        this.state = { missions: Array.isArray(s.missions) ? s.missions : [], settings: { ...DEFAULT_SETTINGS, ...(s.settings ?? {}) }, currentId: s.currentId };
+        this.state = { missions: Array.isArray(s.missions) ? s.missions : [], settings: { ...DEFAULT_SETTINGS, ...(s.settings ?? {}) }, currentId: s.currentId, quota: s.quota ?? null };
+        if (this.state.quota) this.quota = freshQuota(this.state.quota);
       } catch { /* état illisible : on repart proprement */ }
     }
     // une mission restée « au travail » (le bureau a été coupé pendant qu'elle tournait) est arrêtée
@@ -176,6 +188,7 @@ export class Bureau {
       chefModel: typeof p.chefModel === 'string' && CHEF_MODELS.includes(p.chefModel) ? p.chefModel : cur.chefModel,
       teamModel: typeof p.teamModel === 'string' && TEAM_MODELS.includes(p.teamModel) ? p.teamModel : cur.teamModel,
       permission: p.permission === 'ask' || p.permission === 'auto' ? p.permission : cur.permission,
+      roleModels: p.roleModels && typeof p.roleModels === 'object' ? cleanRoleModels(p.roleModels) : cur.roleModels,
       workdir,
       // le dernier dossier choisi passe en tête de la liste (le navigateur ne peut pas la modifier)
       recent: workdir ? [workdir, ...cur.recent.filter((d) => d !== workdir)].slice(0, MAX_RECENT) : cur.recent,
@@ -386,7 +399,7 @@ export class Bureau {
     // le Normalizer renvoie vers la mission courante ; « proc » est connu dès que la ligne suivante a tourné
     const norm: Normalizer = new Normalizer({
       emit: (ev) => { if (cur.live?.proc === proc) this.onEvent(cur, ev); },
-      onQuota: (q) => { this.quota = q; this.broadcast({ t: 'quota', quota: q }); },
+      onQuota: (q) => this.setQuota(q),
       onResult: (r) => { if (cur.live?.proc === proc) this.onResult(cur, r); },
       folder: cur.mission.folder,
       names: cur.names,
@@ -434,6 +447,31 @@ export class Bureau {
     this.finish(cur, r.ok, r.text.trim() || cur.lastChefText, r.ms, cur.stopAsked);
   }
 
+  private setQuota(q: Quota) {
+    this.quota = q;
+    this.state.quota = q;
+    this.broadcast({ t: 'quota', quota: q });
+    this.save();
+  }
+
+  private measuring = false;
+  private lastMeasure = 0;
+
+  /** Mesure le quota (un tout petit appel à Haiku) ; `auto` : en fin de mission, pas plus d'une fois par minute. */
+  async refreshQuota(auto = false) {
+    if (!this.claude || this.measuring) return;
+    if (auto && Date.now() - this.lastMeasure < 60_000) return;
+    this.measuring = true;
+    this.lastMeasure = Date.now();
+    try {
+      const q = await measureQuota(this.claude.path, this.dir);
+      if (q) this.setQuota(q);
+      else if (!auto) this.broadcast({ t: 'toast', kind: 'error', text: 'Je n’ai pas pu mesurer ton énergie. Réessaie dans un instant.' });
+    } finally {
+      this.measuring = false;
+    }
+  }
+
   private finish(cur: Current, ok: boolean, text: string, ms: number, stopped: boolean) {
     const m = cur.mission;
     if (m.status !== 'working') return;
@@ -457,6 +495,7 @@ export class Bureau {
     this.record(cur, { k: 'end', ok, text: m.final ?? '', ms, stopped, ...(usage ? { usage } : {}) });
     this.broadcast({ t: 'mission', mission: m });
     this.save();
+    void this.refreshQuota(true); // la jauge d'énergie se met à jour à chaque fin de mission
     // Max reste disponible un moment pour les retouches, puis s'endort (il reprendra sa séance si on lui reparle)
     if (cur.idleTimer) clearTimeout(cur.idleTimer);
     cur.idleTimer = setTimeout(() => {

@@ -42,7 +42,8 @@ function group(chat: ChatMsg[], tech: boolean): (ChatMsg | ChatMsg[])[] {
   const out: (ChatMsg | ChatMsg[])[] = [];
   for (const m of chat) {
     if (m.kind !== 'tool') { out.push(m); continue; }
-    if (!tech) continue;
+    // le plan de Max a son propre message : pas de ligne technique en double
+    if (!tech || m.act?.tool === 'ExitPlanMode') continue;
     const last = out[out.length - 1];
     if (Array.isArray(last)) last.push(m); else out.push([m]);
   }
@@ -71,7 +72,7 @@ function PlanMessage({ m }: { m: ChatMsg }) {
     setEditing(false);
   };
   return (
-    <div className={`chat-msg chef plan ${state}`}>
+    <div className={`chat-msg chef plan-msg ${state}`}>
       <div className="chat-who">
         📝 Plan de Max <span>{time(m.at)}</span>
         <em className={`plan-state ${state}`}>{PLAN_STATE[state]}</em>

@@ -116,6 +116,8 @@ export interface Settings {
   chefModel: string;
   /** le cerveau de l'équipe : sonnet, haiku, opus, fable ou inherit (le même que le chef) */
   teamModel: string;
+  /** le cerveau de chaque métier, quand il diffère de celui de l'équipe (ex. { recherche: 'haiku' }) */
+  roleModels: Partial<Record<Role, string>>;
   /** auto : l'équipe décide seule et ne demande que pour les gestes risqués ; ask : elle demande avant chaque commande */
   permission: 'auto' | 'ask';
   /** le dossier où l'équipe travaille : '' = un nouveau dossier pour chaque mission (dans « Missions ») */
@@ -126,7 +128,8 @@ export interface Settings {
   branchPattern: string;
 }
 
-export interface Quota { fiveHour: number; resetsAt: number | null }
+/** Ton quota Claude : la part déjà utilisée (0 à 1) sur 5 heures et sur 7 jours, quand il se recharge (secondes), et quand on l'a mesuré. */
+export interface Quota { fiveHour: number; resetsAt: number | null; sevenDay?: number; sevenDayResetsAt?: number | null; at?: number }
 
 /** Mode projet : un fichier du diff de la mission (l'arbre de travail comparé à la branche de départ). */
 export interface DiffFile {
@@ -191,7 +194,9 @@ export type ClientMsg =
   /** mode projet : une action git sur la branche de la mission */
   | { t: 'git'; missionId: string; action: GitAction; message?: string }
   /** vérifie les connecteurs MCP (claude mcp list), dans le dossier de la mission ou du projet choisi */
-  | { t: 'mcp_list' };
+  | { t: 'mcp_list' }
+  /** mesure le quota maintenant (un tout petit appel à Haiku) */
+  | { t: 'quota_refresh' };
 
 // ── Serveur → navigateur ──
 export type ServerMsg =

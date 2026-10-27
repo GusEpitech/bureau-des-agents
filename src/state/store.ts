@@ -168,7 +168,7 @@ export const useOffice = create<S>((set, get) => ({
   connection: 'connecting',
   claude: null,
   dir: '',
-  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN },
+  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN },
   quota: null,
   missions: [],
   mission: null,
