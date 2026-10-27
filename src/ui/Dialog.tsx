@@ -187,7 +187,7 @@ function Composer() {
   const mode: 'new' | 'steer' | 'retouch' = !mission ? 'new' : busy ? 'steer' : 'retouch';
   const placeholder = mode === 'new'
     ? project ? 'Dis à Max quoi faire dans ton projet… (par exemple : corrige le bug du formulaire de connexion)' : 'Dis à Max ce que tu veux… (par exemple : analyse mes 5 concurrents)'
-    : mode === 'steer' ? 'Une précision pour Max ? Il la lira entre deux étapes.' : 'Demande une retouche à Max… ou lance une nouvelle mission.';
+    : mode === 'steer' ? 'Une précision pour Max ? Il la lira entre deux étapes.' : 'Continue la conversation avec Max (il se souvient de tout)… ou lance une nouvelle mission.';
 
   const submit = () => {
     const t = text.trim();

@@ -121,7 +121,9 @@ export type ClientMsg =
   | { t: 'replay'; missionId: string }
   | { t: 'settings'; settings: Partial<Settings> }
   /** ouvre la fenêtre de choix de dossier de l'ordinateur, pour choisir le dossier de travail */
-  | { t: 'pick_folder' };
+  | { t: 'pick_folder' }
+  /** rouvre une mission passée : sa conversation, son récap, ses fichiers ; on peut ensuite continuer à parler à Max */
+  | { t: 'resume'; missionId: string };
 
 // ── Serveur → navigateur ──
 export type ServerMsg =
@@ -129,6 +131,8 @@ export type ServerMsg =
   | { t: 'mission'; mission: MissionInfo }
   | { t: 'ev'; missionId: string; at: number; ev: OfficeEvent }
   | { t: 'closed'; missionId: string }
+  /** une mission passée rouverte devient la mission en cours (avec tout ce qui s'y est passé) */
+  | { t: 'current'; mission: MissionInfo; log: Logged[] }
   | { t: 'replay'; mission: MissionInfo; log: Logged[] }
   | { t: 'file_text'; missionId: string; file: string; text: string; truncated: boolean; version?: string }
   | { t: 'versions'; missionId: string; file: string; list: VersionInfo[] }

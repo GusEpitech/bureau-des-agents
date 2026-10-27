@@ -57,7 +57,7 @@ const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'target', '__pyca
 /** Un nom de dossier sûr pour ranger les versions d'un fichier. */
 const versionDirName = (rel: string) => rel.replace(/[\\/]+/g, '__').replace(/[^\w.\-À-ÿ ]+/g, '_').slice(0, 160);
 
-interface State { missions: MissionInfo[]; settings: Settings }
+interface State { missions: MissionInfo[]; settings: Settings; /** la mission ouverte (rouverte au redémarrage du bureau) */ currentId?: string }
 
 interface Live {
   proc: ClaudeProcess;
@@ -135,7 +135,7 @@ export class Bureau {
     if (existsSync(this.stateFile)) {
       try {
         const s = JSON.parse(await readFile(this.stateFile, 'utf8')) as Partial<State>;
-        this.state = { missions: Array.isArray(s.missions) ? s.missions : [], settings: { ...DEFAULT_SETTINGS, ...(s.settings ?? {}) } };
+        this.state = { missions: Array.isArray(s.missions) ? s.missions : [], settings: { ...DEFAULT_SETTINGS, ...(s.settings ?? {}) }, currentId: s.currentId };
       } catch { /* état illisible : on repart proprement */ }
     }
     // une mission restée « au travail » (le bureau a été coupé pendant qu'elle tournait) est arrêtée
@@ -143,6 +143,9 @@ export class Bureau {
     // les dossiers récents qui ont disparu sortent de la liste
     const s = this.state.settings;
     s.recent = (Array.isArray(s.recent) ? s.recent : []).filter((d) => typeof d === 'string' && existsSync(d)).slice(0, MAX_RECENT);
+    // la conversation ouverte avant l'arrêt du bureau est toujours là : on peut la continuer
+    const open = this.state.currentId ? this.mission(this.state.currentId) : null;
+    if (open) await this.load(open).catch(() => { this.state.currentId = undefined; });
   }
 
   claudeInfo(): ClaudeInfo {
@@ -258,6 +261,7 @@ export class Bureau {
       status: 'working', stats: emptyStats(), files: [], project, branch: git?.branch, baseBranch: git?.base,
     };
     this.state.missions.push(mission);
+    this.state.currentId = mission.id;
     if (this.state.missions.length > MAX_MISSIONS) this.state.missions.splice(0, this.state.missions.length - MAX_MISSIONS);
     this.save();
     const cur: Current = {
@@ -578,8 +582,53 @@ export class Bureau {
     cur.watcher?.close();
     if (cur.live) { cur.live.stopping = true; cur.live.proc.stop(); }
     this.current = null;
+    this.state.currentId = undefined;
     this.broadcast({ t: 'closed', missionId: cur.mission.id });
     this.save();
+  }
+
+  /**
+   * Rouvre une mission passée : elle redevient la mission en cours, avec sa conversation et ses fichiers.
+   * Rien n'est lancé : Max reprend sa séance (et tout son historique) au prochain message.
+   */
+  async resume(missionId: string) {
+    const m = this.mission(missionId);
+    if (!m) throw new Error('Cette mission n’existe plus.');
+    if (this.current?.mission.id === m.id) {
+      this.broadcast({ t: 'current', mission: m, log: this.current.log });
+      return;
+    }
+    if (this.current?.mission.status === 'working') throw new Error('L’équipe est déjà sur une mission. Attends qu’elle la rende, ou arrête-la.');
+    if (!existsSync(m.folder)) throw new Error('Le dossier de cette mission n’existe plus.');
+    if (this.current) this.close();
+    const cur = await this.load(m);
+    this.state.currentId = m.id;
+    this.save();
+    this.broadcast({ t: 'current', mission: m, log: cur.log });
+  }
+
+  /** Remet une mission en place comme mission en cours, d'après son enregistrement. */
+  private async load(m: MissionInfo): Promise<Current> {
+    const raw = await readFile(path.join(this.recDir, `${m.id}.jsonl`), 'utf8').catch(() => '');
+    const log: Logged[] = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try { log.push(JSON.parse(line) as Logged); } catch { /* ligne coupée */ }
+    }
+    if (log.length > MAX_LOG) log.splice(0, log.length - MAX_LOG);
+    const names = new Set<string>();
+    let lastChefText = '';
+    for (const { ev } of log) {
+      if (ev.k === 'hire') names.add(ev.name);
+      if (ev.k === 'say' && ev.who === 'chef') lastChefText = ev.text;
+    }
+    const cur: Current = {
+      mission: m, log, live: null, names, watcher: null, fileTimers: new Map(), idleTimer: null,
+      busySince: null, stopAsked: false, lastChefText,
+    };
+    this.current = cur;
+    this.watch(cur);
+    return cur;
   }
 
   /** Le chemin d'un fichier de la mission (refusé s'il sort du dossier). */

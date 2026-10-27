@@ -42,6 +42,9 @@ export interface AskView { requestId: string; who: string; tool: string; label: 
 
 export interface FeedLine { id: number; at: number; who: string; text: string; kind: 'user' | 'chef' | 'hire' | 'act' | 'report' | 'file' | 'ask' | 'end' | 'error' }
 
+/** Un message de la conversation avec Max (ce que tu dis, ce qu'il répond, qui il appelle, ses récaps). */
+export interface ChatMsg { id: number; at: number; kind: 'user' | 'chef' | 'final' | 'note' | 'error'; text: string; ok?: boolean }
+
 export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 
 export type Tod = 'auto' | 'day' | 'evening' | 'night';
@@ -75,6 +78,8 @@ interface S {
   asks: Record<string, AskView>;
   stats: MissionStats;
   feed: FeedLine[];
+  /** toute la conversation de la mission (pas tronquée, contrairement au fil « En direct ») */
+  chat: ChatMsg[];
   final: { ok: boolean; text: string; ms: number; stopped?: boolean; at: number } | null;
   /** quand l'équipe s'est mise au travail (pour le chrono) ; null = au repos */
   busySince: number | null;
@@ -142,6 +147,7 @@ export const useOffice = create<S>((set, get) => ({
   asks: {},
   stats: emptyStats(),
   feed: [],
+  chat: [],
   final: null,
   busySince: null,
   workMs: 0,
@@ -175,7 +181,7 @@ export const useOffice = create<S>((set, get) => ({
   resetMission: (m) => {
     set({
       mission: m, chef: emptyChef(), agents: {}, order: [], plan: [], files: [], asks: {}, stats: emptyStats(),
-      feed: [], final: null, busySince: null, workMs: 0, showFinal: false, planHistory: [],
+      feed: [], chat: [], final: null, busySince: null, workMs: 0, showFinal: false, planHistory: [],
     });
     bus.reset();
   },
@@ -204,6 +210,12 @@ export const useOffice = create<S>((set, get) => ({
       case 'ev':
         if (s.replaying || s.mission?.id !== m.missionId) break;
         get().apply(m.ev, m.at, true);
+        break;
+      case 'current':
+        if (s.replaying) break;
+        get().resetMission(m.mission);
+        for (const l of m.log) get().apply(l.ev, l.at, false);
+        set({ mission: m.mission, historyOpen: false });
         break;
       case 'closed':
         if (!s.replaying && s.mission?.id === m.missionId) get().resetMission(null);
@@ -238,13 +250,14 @@ export const useOffice = create<S>((set, get) => ({
       const line: FeedLine = { id: ++feedId, at, who, text, kind };
       return [...get().feed, line].slice(-MAX_FEED);
     };
+    const chat = (kind: ChatMsg['kind'], text: string, ok?: boolean) => [...get().chat, { id: ++feedId, at, kind, text, ok }];
     const agentName = (who: string) => (who === 'chef' ? 'Max' : s.agents[who]?.name ?? 'Un agent');
     switch (ev.k) {
       case 'start': {
         const first = s.feed.length === 0;
         set({
           chef: { ...s.chef, say: '', typing: '', thinkingAt: at }, final: null, showFinal: false,
-          busySince: at, feed: feed('toi', ev.text, 'user'),
+          busySince: at, feed: feed('toi', ev.text, 'user'), chat: chat('user', ev.text),
         });
         if (live && !first) sfx('send');
         if (live) void say('parti');
@@ -260,7 +273,7 @@ export const useOffice = create<S>((set, get) => ({
         else if (s.agents[ev.who]) set({ agents: { ...s.agents, [ev.who]: { ...s.agents[ev.who], say: ev.text, sayAt: at } } });
         break;
       case 'say':
-        if (ev.who === 'chef') set({ chef: { ...s.chef, say: ev.text, sayAt: at, typing: '' }, feed: feed('Max', ev.text, 'chef') });
+        if (ev.who === 'chef') set({ chef: { ...s.chef, say: ev.text, sayAt: at, typing: '' }, feed: feed('Max', ev.text, 'chef'), chat: chat('chef', ev.text) });
         else if (s.agents[ev.who]) set({ agents: { ...s.agents, [ev.who]: { ...s.agents[ev.who], say: ev.text, sayAt: at } } });
         break;
       case 'plan':
@@ -276,7 +289,10 @@ export const useOffice = create<S>((set, get) => ({
         const stats = { ...s.stats };
         countStats(stats, ev);
         const firstOfRound = !s.order.some((id) => s.agents[id]?.status === 'working' || s.agents[id]?.status === 'reporting');
-        set({ agents: { ...s.agents, [ev.id]: a }, order: [...s.order, ev.id], stats, feed: feed('Max', `appelle ${ev.name} : ${ev.task}`, 'hire') });
+        set({
+          agents: { ...s.agents, [ev.id]: a }, order: [...s.order, ev.id], stats, feed: feed('Max', `appelle ${ev.name} : ${ev.task}`, 'hire'),
+          chat: chat('note', `${ev.name} rejoint l’équipe : ${ev.task}`),
+        });
         if (live) sfx('spawn');
         if (live && firstOfRound) void say('equipe');
         break;
@@ -333,18 +349,26 @@ export const useOffice = create<S>((set, get) => ({
       }
       case 'end': {
         const workMs = s.workMs + (s.busySince ? Math.max(0, at - s.busySince) : 0);
+        // le récap de Max : souvent son dernier message, qui devient alors le récap (pas de doublon)
+        const msgs = get().chat;
+        const last = msgs[msgs.length - 1];
+        const text = ev.text.trim();
+        const recap = last?.kind === 'chef' && (!text || last.text.trim() === text)
+          ? [...msgs.slice(0, -1), { ...last, kind: 'final' as const, ok: ev.ok }]
+          : text ? chat('final', text, ev.ok) : chat('note', ev.ok ? 'Mission accomplie.' : ev.stopped ? 'Mission arrêtée.' : 'La mission s’est mal terminée.');
         set({
           final: { ok: ev.ok, text: ev.text, ms: ev.ms, stopped: ev.stopped, at }, busySince: null, workMs, asks: {},
-          showFinal: false, feed: feed('Max', ev.ok ? 'Mission accomplie !' : ev.stopped ? 'Mission arrêtée.' : 'La mission s’est mal terminée.', 'end'),
+          showFinal: false, chat: recap, feed: feed('Max', ev.ok ? 'Mission accomplie !' : ev.stopped ? 'Mission arrêtée.' : 'La mission s’est mal terminée.', 'end'),
         });
         if (live) sfx(ev.ok ? 'done' : 'error');
         if (live && ev.ok) setTimeout(() => { void say('accomplie', true); }, 900);
         // d'abord Max fait la fête (confettis), puis la carte du rendu s'ouvre
-        if (live && ev.ok) setTimeout(() => { if (get().final?.at === at) set({ showFinal: true }); }, 3200);
+        // (en mode projet, le récap est dans la conversation : pas de carte qui s'ouvre)
+        if (live && ev.ok && !projectModeOf(get())) setTimeout(() => { if (get().final?.at === at) set({ showFinal: true }); }, 3200);
         break;
       }
       case 'error':
-        set({ feed: feed('Max', ev.message, 'error') });
+        set({ feed: feed('Max', ev.message, 'error'), chat: chat('error', ev.message) });
         if (live) get().toast('error', ev.message);
         break;
     }

@@ -43,7 +43,7 @@ export function FinalCard() {
       {!replaying && (
         <div className="final-actions">
           <button className="btn" onClick={() => send({ t: 'open', missionId: mission.id })}>Ouvrir le dossier</button>
-          <button className="btn" onClick={() => { close(); useOffice.setState({ draft: ' ' }); }}>Demander une retouche</button>
+          <button className="btn" onClick={() => { close(); useOffice.setState({ draft: ' ' }); }}>Continuer la conversation</button>
           <button className="btn primary" onClick={() => { sfx('click'); close(); send({ t: 'new' }); }}>Nouvelle mission</button>
         </div>
       )}
@@ -126,7 +126,7 @@ export function History() {
   return (
     <div className="modal-back" onClick={close}>
       <div className="modal history" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head"><b>Missions précédentes</b><button className="close" onClick={close} aria-label="Fermer">×</button></div>
+        <div className="modal-head"><b>Mes missions</b><button className="close" onClick={close} aria-label="Fermer">×</button></div>
         <div className="modal-body">
           {connection !== 'live' && <p className="muted">Relie le bureau à Claude Code (npm start) pour retrouver tes missions.</p>}
           {connection === 'live' && !missions.length && <p className="muted">Aucune mission pour l’instant. La première t’attend en bas de l’écran.</p>}
@@ -148,6 +148,7 @@ export function History() {
                 </span>
               </div>
               <div className="row">
+                <button className="btn small primary" title="Rouvre la conversation : son récap, ses fichiers, et tu peux la continuer avec Max" onClick={() => { sfx('click'); send({ t: 'resume', missionId: m.id }); }}>Ouvrir</button>
                 <button className="btn small" title="Rejoue la mission (sans relancer l’équipe) : parfait pour filmer" onClick={() => { sfx('click'); close(); send({ t: 'replay', missionId: m.id }); }}>▶ Rejouer</button>
                 <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: m.id })}>Dossier</button>
               </div>

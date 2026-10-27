@@ -6,7 +6,8 @@ import { roleInfo } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { robotSprite } from '../engine/robots.ts';
-import { projectModeOf, teamList, useOffice, type AgentView } from '../state/store.ts';
+import { projectModeOf, savePref, teamList, useOffice, type AgentView } from '../state/store.ts';
+import { ChatSection } from './Chat.tsx';
 import { EXAMPLES, PROJECT_EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
@@ -26,16 +27,33 @@ export function Avatar({ role, size = 32 }: { role: Role; size?: number }) {
 
 const STATUS: Record<AgentView['status'], string> = { working: 'Au travail', reporting: 'Rend son rapport', done: 'A rendu son travail', failed: 'N’a pas pu finir' };
 
+const readTab = (): 'chat' | 'mission' => { try { return localStorage.getItem('bureau:panelTab') === '"mission"' ? 'mission' : 'chat'; } catch { return 'chat'; } };
+
 export function Panel() {
   const mission = useOffice((s) => s.mission);
+  const final = useOffice((s) => s.final);
+  const busy = useOffice((s) => s.busySince !== null);
+  const [tab, setTab] = useState(readTab);
+  const pick = (t: 'chat' | 'mission') => { setTab(t); savePref('panelTab', t); };
   return (
-    <aside className="panel">
+    <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
       {mission ? (
         <>
-          <PlanSection />
-          <TeamSection />
-          <FilesSection />
-          <FeedSection />
+          <div className="panel-tabs">
+            <div className="seg">
+              <button className={tab === 'chat' ? 'on' : ''} onClick={() => pick('chat')}>💬 Conversation</button>
+              <button className={tab === 'mission' ? 'on' : ''} onClick={() => pick('mission')}>📋 La mission</button>
+            </div>
+            {final && !busy && <button className="btn small ghost" title="Le récap de Max et les fichiers" onClick={() => { sfx('open'); useOffice.setState({ showFinal: true }); }}>Récap</button>}
+          </div>
+          {tab === 'chat' ? <ChatSection /> : (
+            <>
+              <PlanSection />
+              <TeamSection />
+              <FilesSection />
+              <FeedSection />
+            </>
+          )}
         </>
       ) : <Welcome />}
     </aside>
@@ -93,7 +111,8 @@ function Welcome() {
             <div key={m.id} className="mini-mission">
               <div><b>{m.title}</b><span className="small muted">{m.project ? `🛠️ ${m.project} · ` : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {m.files.length} rendu{m.files.length > 1 ? 's' : ''}</span></div>
               <div className="row">
-                <button className="btn small" onClick={() => { sfx('click'); send({ t: 'replay', missionId: m.id }); }}>Rejouer</button>
+                <button className="btn small" title="Rouvre la conversation : son récap, ses fichiers, et tu peux la continuer" onClick={() => { sfx('click'); send({ t: 'resume', missionId: m.id }); }}>Ouvrir</button>
+                <button className="btn small ghost" onClick={() => { sfx('click'); send({ t: 'replay', missionId: m.id }); }}>Rejouer</button>
                 <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: m.id })}>Dossier</button>
               </div>
             </div>
