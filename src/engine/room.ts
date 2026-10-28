@@ -3,7 +3,7 @@
 // Tout ça ne bouge pas : c'est dessiné une fois, puis recopié à chaque image.
 import { ROLES, roleSign } from '../../shared/activity.ts';
 import { pixelText, textWidth } from './font.ts';
-import { BOARD, CLOCK, H, NEON, T, W, WINDOWS, ZONES } from './layout.ts';
+import { BOARD, CLOCK, H, NEON, OFFICE_H, T, W, WINDOWS, ZONES } from './layout.ts';
 import { g2d, hline, lighten, makeCanvas, mix, P, px, rect, rng, vline, type G } from './pixels.ts';
 
 export type TimeOfDay = 'day' | 'evening' | 'night';
@@ -19,7 +19,7 @@ function floor(g: G) {
   const top = 3 * T;
   const colors = [P.floor1, P.floor2, P.floor3, P.floor1];
   // des lames de parquet de 6 pixels, aux raccords décalés
-  for (let y = top; y < H; y += 6) {
+  for (let y = top; y < OFFICE_H; y += 6) {
     let x = -Math.floor(r() * 20);
     while (x < W) {
       const len = 18 + Math.floor(r() * 22);
@@ -213,8 +213,8 @@ function sideWalls(g: G) {
   }
   // l'ombre des murs de côté sur le sol
   g.fillStyle = 'rgba(8,6,16,0.25)';
-  g.fillRect(T, 3 * T, 2, H - 4 * T);
-  g.fillRect(W - T - 2, 3 * T, 2, H - 4 * T);
+  g.fillRect(T, 3 * T, 2, OFFICE_H - 4 * T);
+  g.fillRect(W - T - 2, 3 * T, 2, OFFICE_H - 4 * T);
 }
 
 function frontWall(g: G) {
@@ -234,10 +234,66 @@ function frontWall(g: G) {
   for (let i = 0; i < 4; i++) hline(g, mx + 2, my + 2 + i * 2, 2 * T - 8, i % 2 ? P.orangeDark : P.orange);
 }
 
+/** La cour : un mur de bureau côté dehors, des dalles, de l'herbe sur les bords, le mur du fond et son portail. */
+function yard(g: G) {
+  const top = 16 * T, bottom = 22 * T;
+  const r = rng(77);
+  // la face extérieure du mur du bureau (avec le passage de la porte)
+  for (const [x0, w] of [[0, 10 * T - 2], [12 * T, W - 12 * T]] as [number, number][]) {
+    rect(g, x0, top, w, 12, P.wallFace);
+    hline(g, x0, top, w, '#2c2740');
+    rect(g, x0, top + 12, w, 3, P.baseboard);
+  }
+  // le sol de la cour, d'un seul tenant (sous la porte aussi : rien ne doit rester transparent)
+  rect(g, T, top, W - 2 * T, bottom - top, '#46425a');
+  // les dalles
+  const slabs = ['#4a4659', '#514c61', '#46425a', '#4d4960'];
+  for (let y = top; y < bottom; y += 16) {
+    for (let x = T; x < W - T; x += 16) {
+      const col = slabs[Math.floor(r() * slabs.length)];
+      rect(g, x, y, 15, 15, col);
+      hline(g, x, y, 15, mix(col, '#7a7592', 0.35));
+      rect(g, x + 15, y, 1, 16, '#35314a');
+      rect(g, x, y + 15, 16, 1, '#35314a');
+      if (r() < 0.2) px(g, x + 3 + Math.floor(r() * 9), y + 4 + Math.floor(r() * 8), '#38344c');
+    }
+  }
+  // un chemin plus clair, de la porte au portail
+  for (let y = top; y < bottom; y += 16) {
+    rect(g, 10 * T, y, 2 * T - 1, 15, '#5b566d');
+    hline(g, 10 * T, y, 2 * T - 1, '#7d7893');
+  }
+  // l'herbe, sur les bords et au pied du mur du fond
+  for (let x = T; x < W - T; x += 2) {
+    const h = 3 + Math.floor(r() * 4);
+    if (x >= 10 * T - 4 && x <= 12 * T + 4) continue;
+    rect(g, x, bottom - h, 2, h, r() < 0.5 ? P.leaf : P.leafDark);
+    if (r() < 0.4) px(g, x, bottom - h - 1, P.leafLight);
+  }
+  for (const x0 of [T, W - T - 6]) for (let y = top + 18; y < bottom - 4; y += 2) {
+    const w2 = 2 + Math.floor(r() * 5);
+    rect(g, x0 === T ? x0 : x0 + 6 - w2, y, w2, 2, r() < 0.5 ? P.leafDark : P.leaf);
+  }
+  // le mur du fond, et le portail
+  rect(g, 0, bottom, 10 * T, T, P.wallTop);
+  rect(g, 12 * T, bottom, W - 12 * T, T, P.wallTop);
+  hline(g, 0, bottom, 10 * T, '#2c2740');
+  hline(g, 12 * T, bottom, W - 12 * T, '#2c2740');
+  for (const x of [10 * T - 3, 12 * T]) {
+    rect(g, x, bottom - 6, 3, T + 6, '#3b3550');
+    vline(g, x, bottom - 6, T + 6, '#4d4666');
+    rect(g, x - 1, bottom - 8, 5, 3, '#4d4666');
+  }
+  // une plaque sur le portail
+  pixelText(g, 'ENTRÉE', 11 * T - textWidth('ENTRÉE') / 2, bottom + 4, '#8a84a3');
+}
+
 /** Dessine toute la pièce (sans les meubles) dans une image de la taille du bureau. */
 export function drawRoom(tod: TimeOfDay): HTMLCanvasElement {
   const c = makeCanvas(W, H);
   const g = g2d(c);
+  // un fond opaque partout : un pixel transparent laisserait l'image précédente (ghosting)
+  rect(g, 0, 0, W, H, P.wallTop);
   floor(g);
   for (const z of ZONES) rug(g, z.x, z.y, z.w, z.h, ROLES[z.role].color);
   backWall(g);
@@ -245,6 +301,7 @@ export function drawRoom(tod: TimeOfDay): HTMLCanvasElement {
   whiteboard(g);
   clockFace(g);
   poster(g);
+  yard(g);
   sideWalls(g);
   frontWall(g);
   return c;

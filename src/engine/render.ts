@@ -1,15 +1,15 @@
 // Le dessin d'une image du bureau : la pièce, puis les meubles et les robots rangés du fond vers
 // l'avant (ceux du fond passent derrière), les effets, et enfin la lumière (le soir et la nuit,
 // la pièce s'assombrit et ce sont les écrans, les lampes et le néon qui éclairent).
-// Tout se dessine sur une toute petite image (352 × 256 pixels), agrandie sans flou : ça ne coûte presque rien.
+// Tout se dessine sur une toute petite image (352 × 368 pixels), agrandie sans flou : ça ne coûte presque rien.
 import type { ActKind } from '../../shared/protocol.ts';
 import { furniturePlacement } from './furniture.ts';
-import { BOARD, CLOCK, FURNITURE, H, NEON, T, W, WINDOWS, type Furn } from './layout.ts';
+import { BOARD, CLOCK, FURNITURE, H, NEON, OFFICE_H, T, W, WINDOWS, type Furn } from './layout.ts';
 import { g2d, makeCanvas, P, rgba, rng, type G } from './pixels.ts';
 import { ANCHOR_X, ANCHOR_Y, robotSprite } from './robots.ts';
 import { drawRoom, neon, signs, type TimeOfDay } from './room.ts';
 import { isProjectMode, ROLES } from '../../shared/activity.ts';
-import type { Actor, World } from './world.ts';
+import { smokeTip, type Actor, type World } from './world.ts';
 
 interface Placed { f: Furn; c: HTMLCanvasElement; x: number; y: number; sortY: number }
 
@@ -95,6 +95,15 @@ export class Renderer {
     }
     const sprite = robotSprite(a.role, a.pose, seated ? 'down' : a.dir, a.frame, a.eyes);
     g.drawImage(sprite, x - ANCHOR_X, y - ANCHOR_Y);
+    if (a.smokeUntil > world.time && !a.moving) {
+      // la cigarette (un petit trait blanc, le bout qui rougeoie)
+      const tip = smokeTip(a);
+      const left = a.dir === 'left';
+      g.fillStyle = '#f4f0ea';
+      g.fillRect(left ? tip.x + 1 : tip.x - 3, tip.y, 3, 1);
+      g.fillStyle = Math.floor(world.time * 2) % 2 ? P.orange : '#ff5a2a';
+      g.fillRect(tip.x, tip.y, 1, 1);
+    }
     g.globalAlpha = 1;
   }
 
@@ -286,7 +295,7 @@ export class Renderer {
   private sunbeams(g: G) {
     g.save();
     g.beginPath();
-    g.rect(T, 3 * T, W - 2 * T, H - 4 * T);
+    g.rect(T, 3 * T, W - 2 * T, OFFICE_H - 4 * T);
     g.clip();
     g.globalCompositeOperation = 'lighter';
     for (const w of WINDOWS) {
@@ -339,6 +348,10 @@ export class Renderer {
     add(16 * T + 14, 14 * T - 8, 14, P.orange, 0.5);
     add(14 * T + 4, 3 * T + 6, 18, '#5fd0ff', 0.35);
     add(11 * T, 15 * T + 8, 30, '#ffe2b8', 0.4);
+    // la cour : deux lampadaires, et le bout rouge des cendriers
+    if (!world.lampsOff.has('lamp-yard-l')) add(8 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
+    if (!world.lampsOff.has('lamp-yard-r')) add(13 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
+    add(11 * T, 22 * T + 4, 26, '#ffe2b8', 0.3);
     if (t < world.printUntil) add(12 * T + 8, 4 * T - 2, 16, '#9effa8', 0.6);
     // les écrans éclairent les visages
     for (const a of atDesk.values()) {

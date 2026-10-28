@@ -499,6 +499,61 @@ function jukeboxSprite(): Sprite {
   return { c, ox: 0, oy: -22, sort: 14 };
 }
 
+/** Un banc de bois, dans la cour. */
+function benchSprite(): Sprite {
+  const c = makeCanvas(48, 18);
+  const g = g2d(c);
+  rect(g, 1, 2, 46, 3, P.wood);
+  hline(g, 1, 2, 46, P.woodHi);
+  rect(g, 1, 6, 46, 3, P.wood);
+  hline(g, 1, 6, 46, P.woodHi);
+  rect(g, 1, 5, 46, 1, P.woodFront);
+  rect(g, 1, 9, 46, 1, P.woodFront);
+  for (const x of [4, 41]) { rect(g, x, 10, 3, 6, P.woodLeg); rect(g, x, 0, 3, 3, P.woodLeg); }
+  outline(c, P.ink);
+  return { c, ox: 0, oy: -2, sort: 15 };
+}
+
+/** Un arbre de la cour : un tronc et une grosse touffe de feuilles. */
+function treeSprite(seed: number): Sprite {
+  const c = makeCanvas(32, 44);
+  const g = g2d(c);
+  const r = rng(seed);
+  rect(g, 14, 26, 4, 14, '#5e4130');
+  vline(g, 14, 26, 14, '#7a553d');
+  rect(g, 12, 38, 8, 2, '#4a3226');
+  ellipse(g, 16, 16, 13, 12, P.leafDark);
+  for (let i = 0; i < 22; i++) {
+    const a = r() * Math.PI * 2;
+    const d = r() * 9;
+    ellipse(g, 16 + Math.cos(a) * d, 15 + Math.sin(a) * d * 0.85, 2 + Math.floor(r() * 3), 2, r() < 0.5 ? P.leaf : P.leafDark);
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = Math.PI * (1.05 + r() * 0.9);
+    const d = 3 + r() * 7;
+    ellipse(g, 14 + Math.cos(a) * d, 12 + Math.sin(a) * d, 1 + Math.floor(r() * 2), 1, P.leafHi);
+  }
+  for (let i = 0; i < 6; i++) px(g, 8 + Math.floor(r() * 14), 6 + Math.floor(r() * 12), P.leafLight);
+  outline(c, P.ink);
+  return { c, ox: -8, oy: -28, sort: 15 };
+}
+
+/** Le cendrier sur pied de la cour. */
+function ashtraySprite(): Sprite {
+  const c = makeCanvas(8, 17);
+  const g = g2d(c);
+  rect(g, 0, 0, 8, 4, '#a8a5b8');
+  hline(g, 0, 0, 8, '#d4d1e0');
+  rect(g, 0, 3, 8, 1, '#76728a');
+  rect(g, 3, 4, 2, 9, P.metalDark);
+  vline(g, 3, 4, 9, P.metal);
+  rect(g, 1, 13, 6, 2, '#2b2836');
+  px(g, 2, 1, P.orange);
+  px(g, 5, 2, '#ff5a2a');
+  outline(c, P.ink);
+  return { c, ox: 3, oy: -2, sort: 14 };
+}
+
 const cache = new Map<string, Sprite>();
 
 export function furnitureSprite(f: Furn): Sprite {
@@ -524,6 +579,9 @@ export function furnitureSprite(f: Furn): Sprite {
     case 'easel': s = easelSprite(); break;
     case 'bin': s = binSprite(); break;
     case 'jukebox': s = jukeboxSprite(); break;
+    case 'bench': s = benchSprite(); break;
+    case 'tree': s = treeSprite(f.seed ?? 1); break;
+    case 'ashtray': s = ashtraySprite(); break;
   }
   cache.set(key, s);
   return s;

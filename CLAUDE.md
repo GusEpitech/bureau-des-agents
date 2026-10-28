@@ -35,7 +35,7 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
   `act`, `report`, `leave`, `file`, `ask`, `end`… **`shared/activity.ts`** : les métiers, leurs outils, les textes affichés.
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).
 - **`src/engine/`** : le monde (`world.ts` : robots, déplacements A*, chat, mode soirée), le dessin (`render.ts`, `room.ts`,
-  `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 256), la caméra et son réalisateur
+  `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 368), la caméra et son réalisateur
   (`camera.ts`), les clics (`hits.ts`).
 - **`src/ui/`** : l'interface React. `Office.tsx` (le canevas, les bulles, la boucle d'animation), `Dialog.tsx` (Max et la boîte de
   saisie), `Rooms.tsx` (les fenêtres qu'on ouvre en cliquant), `interact.ts` (ce que fait chaque clic).
