@@ -270,6 +270,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
     switch (m.t) {
       case 'hello': {
         set({ claude: m.claude, dir: m.dir, settings: m.settings, quota: m.quota, missions: m.missions });
+        get().send({ t: 'week' });
         if (s.replaying) break;
         if (m.current) {
           get().resetMission(m.current.mission);
@@ -307,6 +308,9 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         break;
       case 'versions':
         set({ versions: { ...s.versions, [`${m.missionId}|${m.file}`]: m.list } });
+        break;
+      case 'week':
+        if (m.days) bus.week(m.days);
         break;
       case 'stats':
         set({ usage: m.stats });
@@ -478,6 +482,8 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         break;
       }
       case 'end': {
+        // le tableau du bureau compte la mission qui vient de finir (l'index se met à jour dans l'instant)
+        if (live) setTimeout(() => get().send({ t: 'week' }), 2500);
         const workMs = s.workMs + (s.busySince ? Math.max(0, at - s.busySince) : 0);
         // le récap de Max : souvent son dernier message, qui devient alors le récap (pas de doublon)
         const msgs = get().chat;

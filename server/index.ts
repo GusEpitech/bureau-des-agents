@@ -180,6 +180,9 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
       send({ t: 'stats', stats: bureau.stats(days) });
       break;
     }
+    case 'week':
+      send({ t: 'week', days: bureau.week() });
+      break;
     case 'team_history':
       send({ t: 'team_history', entries: await bureau.teamHistory() });
       break;

@@ -7,8 +7,8 @@ import { ROLES } from '../../shared/activity.ts';
 import { darken, g2d, lighten, makeCanvas, mirror, outline, P, px, rect } from './pixels.ts';
 
 export type Dir = 'down' | 'up' | 'left' | 'right';
-export type Pose = 'stand' | 'walk' | 'sit' | 'type' | 'read' | 'think' | 'carry' | 'raise' | 'cheer' | 'wave' | 'write';
-export type Eyes = 'open' | 'blink' | 'down' | 'up' | 'left' | 'right' | 'happy';
+export type Pose = 'stand' | 'walk' | 'sit' | 'type' | 'read' | 'think' | 'carry' | 'raise' | 'cheer' | 'wave' | 'write' | 'fist';
+export type Eyes = 'open' | 'blink' | 'down' | 'up' | 'left' | 'right' | 'happy' | 'angry';
 
 /** Taille d'un sprite de robot ; les pieds (le bas du contour) sont au point d'ancrage. */
 export const ROBOT_W = 20;
@@ -43,6 +43,7 @@ function lookOf(role: Role): Look {
 const EYE = P.orange;
 const EYE_HI = '#ffe2c4';
 const EYE_DIM = '#c8612a';
+const EYE_ANGRY = '#ff4d3d';
 
 /** Les yeux, dans la visière (vue de face). ox, oy = décalage du regard. */
 function drawEyes(g: CanvasRenderingContext2D, eyes: Eyes, bob: number) {
@@ -57,6 +58,16 @@ function drawEyes(g: CanvasRenderingContext2D, eyes: Eyes, bob: number) {
       rect(g, x, y0, 2, 1, EYE);
       px(g, x - 1, y0 + 1, EYE);
       px(g, x + 2, y0 + 1, EYE);
+    }
+    return;
+  }
+  if (eyes === 'angry') {
+    // les sourcils en V : de petites barres qui descendent vers le nez
+    for (const [x, dir] of [[7, 1], [12, -1]] as [number, number][]) {
+      px(g, x, y0, EYE_ANGRY);
+      px(g, x + dir, y0, EYE_ANGRY);
+      px(g, x + dir, y0 + 1, EYE_ANGRY);
+      px(g, x + 2 * dir, y0 + 1, EYE_ANGRY);
     }
     return;
   }
@@ -93,6 +104,7 @@ function drawHead(g: CanvasRenderingContext2D, L: Look, dir: Dir, eyes: Eyes, bo
     const oy = eyes === 'down' ? 1 : eyes === 'up' ? -1 : 0;
     if (eyes === 'blink') rect(g, 13, y + 5, 2, 1, EYE_DIM);
     else if (eyes === 'happy') { rect(g, 13, y + 4, 2, 1, EYE); px(g, 12, y + 5, EYE); }
+    else if (eyes === 'angry') { rect(g, 13, y + 5, 2, 1, EYE_ANGRY); px(g, 12, y + 4, EYE_ANGRY); px(g, 13, y + 4, EYE_ANGRY); }
     else { rect(g, 13, y + 4 + oy, 2, 2, EYE); px(g, 13, y + 4 + oy, EYE_HI); }
     rect(g, 4, y + 2, 1, 8, L.shade);
   }
@@ -235,6 +247,9 @@ function limbsFor(pose: Pose, frame: number): Limbs {
       return { la: [3, 3 + (frame % 2), 6], ra: [15, 3 + ((frame + 1) % 2), 6], ll: frame % 2, rl: (frame + 1) % 2 };
     case 'wave':
       return { la: [4, 14, 4], ra: [15 + (frame % 2), 4, 6], ll: 0, rl: 0 };
+    case 'fist':
+      // le poing en l'air, qui tremble de colère
+      return { la: [4, 14, 4], ra: [15 + (frame % 2), 1, 7], ll: 0, rl: 0 };
     case 'write':
       return { la: [4, 14, 4], ra: [14, 7 + (frame % 2), 6], ll: 0, rl: 0 };
     case 'carry':
@@ -275,7 +290,7 @@ function build(role: Role, pose: Pose, dir: Dir, frame: number, eyes: Eyes): HTM
       rect(g, 5, 16 + bob, 2, 2, L.hand);
       rect(g, 13, 16 + bob, 2, 2, L.hand);
     }
-    if ((pose === 'raise' || pose === 'cheer' || pose === 'wave') && dir === 'down') {
+    if ((pose === 'raise' || pose === 'cheer' || pose === 'wave' || pose === 'fist') && dir === 'down') {
       // le bras levé redessiné par-dessus la tête quand il la recouvre
       const [x, ay, h] = limbs.ra;
       if (x <= 15) { rect(g, x, ay + bob, 2, h, L.arm); rect(g, x, ay + bob, 2, 1, L.hand); }

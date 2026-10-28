@@ -98,6 +98,9 @@ export interface Stats {
   top: { missionId: string; title: string; tokens: number; team: number }[];
 }
 
+/** Un jour du tableau du bureau : combien de missions et de tokens (`day` : minuit, heure de l'ordinateur). */
+export interface WeekDay { day: number; missions: number; tokens: number }
+
 /** Un résultat de la recherche dans l'historique : la mission, d'où vient l'extrait, et l'extrait (les mots trouvés sont entre \u0001 et \u0002). */
 export interface SearchHit { missionId: string; kind: string; snippet: string }
 
@@ -221,6 +224,8 @@ export type ClientMsg =
   | { t: 'search'; q: string }
   /** le bilan de consommation sur les `days` derniers jours (0 : tout) */
   | { t: 'stats'; days: number }
+  /** les 7 derniers jours, pour le tableau du bureau */
+  | { t: 'week' }
   | { t: 'replay'; missionId: string }
   | { t: 'settings'; settings: Partial<Settings> }
   /** ouvre la fenêtre de choix de dossier de l'ordinateur, pour choisir le dossier de travail */
@@ -250,6 +255,7 @@ export type ServerMsg =
   | { t: 'team_history'; entries: TeamEntry[] }
   | { t: 'search'; q: string; hits: SearchHit[] }
   | { t: 'stats'; stats: Stats | null }
+  | { t: 'week'; days: WeekDay[] | null }
   | { t: 'quota'; quota: Quota }
   | { t: 'settings'; settings: Settings }
   | { t: 'toast'; kind: 'info' | 'error'; text: string }

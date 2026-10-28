@@ -2,7 +2,7 @@
 // Les fichiers .jsonl restent la source de vérité : la base se reconstruit toute seule, on peut la supprimer sans rien perdre.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import type { AgentUse, Logged, MissionInfo, Role, SearchHit, Stats } from '../shared/protocol.ts';
+import type { AgentUse, Logged, MissionInfo, Role, SearchHit, Stats, WeekDay } from '../shared/protocol.ts';
 
 // l'import est dynamique : si cette version de Node n'a pas SQLite, le bureau marche, sans la recherche
 type Db = import('node:sqlite').DatabaseSync;
@@ -152,6 +152,31 @@ export class Library {
       if (hits.length >= limit) break;
     }
     return hits;
+  }
+
+  /** Les 7 derniers jours (le plus ancien d'abord, aujourd'hui en dernier) : missions lancées et tokens consommés. */
+  week(missions: MissionInfo[]): WeekDay[] {
+    this.sync(missions);
+    const days: WeekDay[] = [];
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const x = new Date(d);
+      x.setDate(d.getDate() - i);
+      days.push({ day: x.getTime(), missions: 0, tokens: 0 });
+    }
+    const first = days[0].day;
+    const tokens = new Map<string, number>();
+    for (const r of this.db.prepare('SELECT mission_id, sum(tokens) AS t FROM agents GROUP BY mission_id').all()) tokens.set(String(r.mission_id), Number(r.t));
+    for (const r of this.db.prepare('SELECT mission_id, sum(input + output + cache_read + cache_write) AS t FROM turns GROUP BY mission_id').all()) tokens.set(String(r.mission_id), (tokens.get(String(r.mission_id)) ?? 0) + Number(r.t));
+    for (const m of missions) {
+      if (m.createdAt < first) continue;
+      const slot = days.findLast((x) => x.day <= m.createdAt);
+      if (!slot) continue;
+      slot.missions++;
+      slot.tokens += tokens.get(m.id) ?? 0;
+    }
+    return days;
   }
 
   /** Le bilan de la consommation sur les `days` derniers jours (0 : depuis toujours). */

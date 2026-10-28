@@ -40,6 +40,7 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
   (`camera.ts`), les clics (`hits.ts`).
 - **`src/ui/`** : l'interface React. `Office.tsx` (le canevas, les bulles, la boucle d'animation), `Dialog.tsx` (Max et la boîte de
   saisie), `Rooms.tsx` (les fenêtres qu'on ouvre en cliquant), `interact.ts` (ce que fait chaque clic).
+- **Petites mises en scène** : un test qui échoue (commande `bash` qui ressemble à un test, ou n'importe quelle commande du métier « analyse ») fait lever le poing au robot (`Actor.angryUntil`, pose `fist`, yeux `angry`, `World.rage`). Le tableau du fond montre la semaine (`World.week`, message `week`) tant qu'il n'y a pas de plan. Le chat (`cat.ts`) vient voir ceux qui dorment (`sleepers`) et s'endort sur le clavier de Max quand son bureau est libre (`deskTaken`).
 - **`src/audio/`** : bruitages ZzFX, jukebox (`public/music/`), voix de Max (`public/voice/`).
 - **`public/demo/mission.json`** : une vraie mission enregistrée, rejouée quand le serveur n'est pas là (`scripts/make-demo.ts`).
 

@@ -1,7 +1,7 @@
 // Le monde du bureau : les robots, ce qu'ils font, où ils vont. Chaque événement venu de Claude Code
 // devient une petite mise en scène : un membre de l'équipe arrive par la porte, va à son bureau, tape
 // ou lit selon ce qu'il fait vraiment, se lève pour rendre son rapport au chef, puis repart.
-import type { ActKind, OfficeEvent, PlanItem, Role } from '../../shared/protocol.ts';
+import type { ActKind, OfficeEvent, PlanItem, Role, WeekDay } from '../../shared/protocol.ts';
 import { Cat } from './cat.ts';
 import { Fx } from './fx.ts';
 import { iconFor } from './icons.ts';
@@ -70,6 +70,9 @@ export class Actor {
   /** jusqu'à quand il ne s'écarte plus de personne (couloir trop étroit : on se croise, on ne reste pas coincé) */
   ghostUntil = 0;
   sadUntil = 0;
+  /** jusqu'à quand il est furieux (un test a échoué) */
+  angryUntil = 0;
+  nextAnger = 0;
   reported = false;
   delivered = false;
   left = false;
@@ -119,6 +122,8 @@ export function smokeTip(a: Actor, time = 0): Pt {
   return { x: Math.round(a.x) + Math.round(dx * (1 - 0.3 * k)), y: Math.round(a.y) - 11 - Math.round(3 * k) };
 }
 
+/** Les commandes qui ressemblent à des tests ou à des vérifications : si elles échouent, quelqu'un s'énerve. */
+const TEST_CMD = /\b(test|tests|jest|vitest|pytest|mocha|rspec|phpunit|playwright|cypress|lint|eslint|tsc|check|build)\b/i;
 const MAX_RESIDENTS = 10;
 /** Les deux places du canapé, aux deux bouts : le milieu est la place du chat. `tile` : d'où on l'enjambe (derrière le dossier). */
 const SOFA_SLOTS: { x: number; y: number; tile: Tile }[] = [{ x: 38, y: 237, tile: [2, 13] }, { x: 74, y: 237, tile: [4, 13] }];
@@ -144,6 +149,10 @@ export class World {
   /** qui fait quoi : écrit au tableau, coché quand l'agent a rendu son travail */
   assignments: { id: string; role: Role; name: string; task: string; status: 'working' | 'done' | 'failed' }[] = [];
   private planSize = -1;
+  /** les 7 derniers jours (missions, tokens), pour le tableau quand il n'y a pas de plan */
+  week: WeekDay[] | null = null;
+  /** les commandes qui ressemblent à des tests : appel d'outil → qui l'a lancée */
+  private testRuns = new Map<string, string>();
   // ── la vie du bureau (et ses œufs de Pâques) ──
   cat = new Cat();
   /** la couleur du néon (clique dessus pour en changer) */
@@ -194,6 +203,7 @@ export class World {
     this.plan = [];
     this.assignments = [];
     this.planSize = -1;
+    this.testRuns.clear();
     const p = SPOTS.receptionPx;
     this.actors.set('chef', new Actor('chef', 'chef', 'Max', p.x, p.y));
     this.residents.clear();
@@ -669,9 +679,18 @@ export class World {
         if (!a) break;
         a.act = ev.kind;
         a.actAt = this.time;
+        if (ev.kind === 'bash' && (a.role === 'analyse' || TEST_CMD.test(`${ev.detail} ${ev.raw ?? ''}`))) this.testRuns.set(ev.id, ev.who);
         if (!live) break;
         this.fx.floatIcon(a.x + (a.seated ? 0 : 1), a.y - 24, iconFor(ev.kind));
         if (ev.kind === 'search' || ev.kind === 'web') this.fx.data(this.nearestWindow(a), { x: a.x, y: a.y - 8 }, ev.kind === 'web' ? '#3ddc97' : '#7fd6ff');
+        break;
+      }
+      case 'act_done': {
+        const who = this.testRuns.get(ev.id);
+        if (who === undefined) break;
+        this.testRuns.delete(ev.id);
+        const a = this.actors.get(who);
+        if (live && !ev.ok && a && !a.left) this.rage(a);
         break;
       }
       case 'report': {
@@ -807,8 +826,25 @@ export class World {
     const chef = this.chef;
     // la vapeur du café
     if (this.time > this.steamAt) { this.steamAt = this.time + 0.35; this.fx.steam(16 * T + 11, 13 * T + 4); }
-    // le chat
+    // le chat : il sait qui dort, et si le bureau de Max est libre
+    let sleepers = 0;
+    for (const a of this.actors.values()) if (a.doing === 'sleep') sleepers++;
+    this.cat.sleepers = sleepers;
+    this.cat.deskTaken = this.missionActive || chef.seated || chef.busy;
     if (this.cat.update(dt, this.time, this.grid, (x, y) => this.fx.floatIcon(x, y, 'zzz'))) moving = true;
+    const cat = this.cat;
+    if (cat.startled) {
+      // chassé du clavier : Max sourit, il ne va pas se fâcher contre un chat
+      cat.startled = false;
+      this.fx.floatIcon(cat.x, cat.y - 14, 'alert');
+      chef.happyUntil = this.time + 1.3;
+    }
+    if (cat.arrived) {
+      const kind = cat.arrived;
+      cat.arrived = '';
+      if (kind === 'sleeper') this.fx.floatIcon(cat.x, cat.y - 13, 'heart');
+      else { this.fx.floatIcon(cat.x, cat.y - 14, 'heart'); if (chef.alpha > 0.9) chef.happyUntil = this.time + 1.2; }
+    }
     // le jukebox : des notes qui s'envolent quand il joue
     if (this.musicOn && this.time > this.noteAt) {
       this.noteAt = this.time + 0.7 + Math.random() * 0.5;
@@ -850,6 +886,17 @@ export class World {
       }
     }
     for (const a of this.actors.values()) {
+      if (a.angryUntil > this.time) {
+        moving = true;
+        // de la vapeur qui sort de la tête, et une marque de colère de temps en temps
+        if (this.time > a.nextAnger) {
+          a.nextAnger = this.time + 0.45;
+          for (let i = 0; i < 3; i++) this.fx.steam(a.x - 4 + i * 4, a.y - 22);
+          if (Math.random() < 0.4) this.fx.floatIcon(a.x + 5, a.y - 25, 'anger');
+        }
+      }
+    }
+    for (const a of this.actors.values()) {
       if (a.doing === 'sleep' && this.time > a.nextPuff) { a.nextPuff = this.time + 1.7; this.fx.floatIcon(a.x + 4, a.y - 24, 'zzz'); }
     }
     for (const a of [...this.actors.values()]) {
@@ -861,7 +908,7 @@ export class World {
         if (this.runTask(a, task, dt) && a.cur === task) a.cur = null;
       }
       this.animate(a, dt);
-      if (a.moving || (a.cur && !(a.res && !a.onMission && a.cur.t === 'wait')) || a.seated || a.cheerUntil > this.time || a.doing === 'notes' || a.doing === 'phone') moving = true;
+      if (a.moving || (a.cur && !(a.res && !a.onMission && a.cur.t === 'wait')) || a.seated || a.cheerUntil > this.time || a.angryUntil > this.time || a.doing === 'notes' || a.doing === 'phone') moving = true;
     }
     this.calm = !this.missionActive && this.time >= this.discoUntil && !this.musicOn && this.time >= this.printUntil && this.time >= this.boardUntil;
     return moving;
@@ -950,6 +997,13 @@ export class World {
     return true;
   }
 
+  /** Un test a échoué : le testeur lève le poing (les autres grincent des dents). */
+  private rage(a: Actor) {
+    a.angryUntil = this.time + 2.6;
+    a.nextAnger = this.time;
+    this.fx.floatIcon(a.x + 5, a.y - 24, 'anger');
+  }
+
   petCat() {
     this.cat.pet(this.time);
     this.fx.floatIcon(this.cat.x, this.cat.y - 12, 'heart');
@@ -970,6 +1024,7 @@ export class World {
     if (a.doing === 'sofa' || a.doing === 'sleep') { pose = 'sit'; a.dir = 'down'; }
     else if (a.cur?.t === 'wait' && a.cur.pose) pose = a.cur.pose;
     else if (a.moving) pose = a.carrying ? 'carry' : 'walk';
+    else if (a.angryUntil > t && a.role === 'analyse') { pose = 'fist'; a.dir = 'down'; }
     else if (a.asks > 0) pose = 'raise';
     else if (a.cheerUntil > t) pose = 'cheer';
     else if (a.carrying) pose = 'carry';
@@ -985,6 +1040,7 @@ export class World {
       case 'carry': a.frame = a.moving ? Math.floor(ft * 8) % 4 : 0; break;
       case 'type': a.frame = Math.floor(ft * 7) % 2; break;
       case 'cheer': case 'wave': a.frame = Math.floor(ft * 6) % 2; break;
+      case 'fist': a.frame = Math.floor(ft * 11) % 2; break;
       case 'raise': a.frame = Math.floor(ft * 3) % 2; break;
       case 'write': a.frame = Math.floor(ft * 5) % 2; break;
       default: a.frame = 0;
@@ -1002,7 +1058,8 @@ export class World {
       a.nextLook = t + 2.5 + Math.random() * 3;
     }
     let eyes: Eyes = 'open';
-    if (a.happyUntil > t || pose === 'cheer') eyes = 'happy';
+    if (a.angryUntil > t) eyes = 'angry';
+    else if (a.happyUntil > t || pose === 'cheer') eyes = 'happy';
     else if (a.sadUntil > t) eyes = 'down';
     else if (pose === 'type') eyes = 'down';
     else if (pose === 'read') eyes = Math.floor(ft * 2.2) % 2 ? 'left' : 'right';
@@ -1011,7 +1068,7 @@ export class World {
     else if (a.lookUntil > t && !a.moving) eyes = a.look;
     if (a.doing === 'notes' || a.doing === 'phone') eyes = 'down';
     else if (a.doing === 'sofa' && this.cat.onSofa && a.happyUntil <= t && !a.moving) eyes = a.slot === 0 ? 'right' : 'left'; // il regarde le chat dormir
-    if (a.blinkUntil > t && eyes !== 'happy') eyes = 'blink';
+    if (a.blinkUntil > t && eyes !== 'happy' && eyes !== 'angry') eyes = 'blink';
     if (a.doing === 'sleep') eyes = 'blink';
     a.eyes = eyes;
   }

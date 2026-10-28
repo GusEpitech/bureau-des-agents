@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats, mcpPrefix } from '../shared/activity.ts';
 import { branchFromPlan, branchName, DEFAULT_BRANCH_PATTERN, tidyBranch } from '../shared/branch.ts';
-import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, SearchHit, ServerMsg, Stats, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
+import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, SearchHit, ServerMsg, Stats, WeekDay, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
 import { Library } from './library.ts';
 import { mcpList } from './mcp.ts';
 import { ClaudeProcess, freshQuota, measureQuota, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
@@ -703,6 +703,11 @@ export class Bureau {
   /** Le bilan de consommation (la base SQLite) ; null si elle n'est pas disponible. */
   stats(days: number): Stats | null {
     return this.library ? this.library.stats(this.state.missions, days) : null;
+  }
+
+  /** Les 7 derniers jours, pour le tableau du bureau. */
+  week(): WeekDay[] | null {
+    return this.library ? this.library.week(this.state.missions) : null;
   }
 
   /** Tous les agents passés au bureau, mission par mission (les plus récentes d'abord). */

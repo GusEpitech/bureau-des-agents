@@ -4,6 +4,7 @@
 // Tout se dessine sur une toute petite image (352 × 368 pixels), agrandie sans flou : ça ne coûte presque rien.
 import type { ActKind } from '../../shared/protocol.ts';
 import { furniturePlacement } from './furniture.ts';
+import { pixelText } from './font.ts';
 import { BOARD, CLOCK, FURNITURE, H, NEON, OFFICE_H, T, W, WINDOWS, type Furn } from './layout.ts';
 import { g2d, makeCanvas, P, rgba, rng, type G } from './pixels.ts';
 import { ANCHOR_X, ANCHOR_Y, robotSprite } from './robots.ts';
@@ -452,8 +453,50 @@ export class Renderer {
     g.globalCompositeOperation = 'source-over';
   }
 
+  /** Sans plan, le tableau montre la semaine : une barre par jour (les tokens), et les totaux. */
+  private weekBoard(g: G, world: World) {
+    const week = world.week;
+    if (!week) return;
+    const ink = '#2b2836', soft = '#8a8ea2';
+    const x0 = BOARD.x + 5;
+    // le titre « LE PLAN » est effacé, puis réécrit au feutre : « SEMAINE »
+    g.fillStyle = '#f4f5f9';
+    g.fillRect(BOARD.x + 3, BOARD.y + 2, 36, 8);
+    const tw = pixelText(g, 'SEMAINE', BOARD.x + 4, BOARD.y + 3, P.orangeDark);
+    g.fillStyle = P.orange;
+    g.fillRect(BOARD.x + 4, BOARD.y + 9, tw, 1);
+    const max = Math.max(...week.map((d) => d.tokens), 1);
+    const base = BOARD.y + 28;
+    week.forEach((d, i) => {
+      const x = x0 + i * 6;
+      const today = i === week.length - 1;
+      const h = d.tokens > 0 ? Math.max(2, Math.round((d.tokens / max) * 15)) : 0;
+      if (h) {
+        g.fillStyle = today ? P.orange : P.orangeLight;
+        g.fillRect(x, base - h, 4, h);
+        g.fillStyle = today ? P.orangeDark : P.orange;
+        g.fillRect(x, base - h, 4, 1);
+      } else {
+        g.fillStyle = '#c9ccd8';
+        g.fillRect(x, base - 1, 4, 1);
+      }
+      pixelText(g, 'DLMMJVS'[new Date(d.day).getDay()], x, BOARD.y + 29, today ? ink : soft);
+    });
+    // la ligne du sol
+    g.fillStyle = '#c9ccd8';
+    g.fillRect(x0 - 1, base, week.length * 6, 1);
+    // les totaux à droite
+    const missions = week.reduce((n, d) => n + d.missions, 0);
+    const tokens = week.reduce((n, d) => n + d.tokens, 0);
+    const tx = BOARD.x + 52;
+    pixelText(g, String(missions), tx, BOARD.y + 9, ink);
+    pixelText(g, missions > 1 ? 'MISSIONS' : 'MISSION', tx, BOARD.y + 16, soft);
+    pixelText(g, tokens >= 1e6 ? `${(tokens / 1e6).toFixed(1)}M` : tokens >= 1e3 ? `${Math.round(tokens / 1e3)}K` : String(tokens), tx, BOARD.y + 23, ink);
+  }
+
   /** Le plan, au feutre sur le tableau : une ligne par étape, cochée quand elle est faite. */
   private board(g: G, world: World, t: number) {
+    if (!world.plan.length && !world.assignments.length) { this.weekBoard(g, world); return; }
     const items = world.plan.slice(0, 5);
     const x0 = BOARD.x + 4;
     items.forEach((it, i) => {
