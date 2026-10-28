@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { describeAct, NAMES, permissionText, roleOfType, ROLES, cut } from '../shared/activity.ts';
-import type { McpServer, OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
+import type { AgentUse, McpServer, OfficeEvent, PlanItem, Quota, Role, TurnUsage } from '../shared/protocol.ts';
 
 export interface ClaudeBinary { path: string; version: string }
 
@@ -213,6 +213,8 @@ export class Normalizer {
   private whoOfTool = new Map<string, string>();      // appel d'outil → qui l'a fait
   private agentOfTask = new Map<string, string>();    // task_id → membre de l'équipe
   private reported = new Set<string>();
+  /** ce que chaque agent a consommé : qui → message → usage (un message revient plusieurs fois, un par bloc : on garde le dernier) */
+  private spent = new Map<string, Map<string, { use: AgentUse; model: string }>>();
   private typing = new Map<string, string>();         // texte en cours d'écriture, par agent
   private typingSentAt = new Map<string, number>();
   private pendingInputs = new Map<string, unknown>(); // demandes de permission → entrée de l'outil
@@ -313,7 +315,34 @@ export class Normalizer {
   private leave(id: string, ok: boolean, usage?: Json) {
     if (!this.present.has(id)) return;
     this.present.delete(id);
-    this.emit({ k: 'leave', who: id, ok, tokens: Number(usage?.total_tokens ?? 0), tools: Number(usage?.tool_uses ?? 0), ms: Number(usage?.duration_ms ?? 0) });
+    this.emit({ k: 'leave', who: id, ok, tokens: Number(usage?.total_tokens ?? 0), tools: Number(usage?.tool_uses ?? 0), ms: Number(usage?.duration_ms ?? 0), use: this.useOf(id) });
+  }
+
+  /** Note l'usage d'un message de cet agent (le dernier état du message l'emporte). */
+  private spend(who: string, m: Json) {
+    const u = m.message?.usage as Json | undefined;
+    const id = String(m.message?.id ?? '');
+    if (!u || !id) return;
+    const n = (v: unknown) => Number(v) || 0;
+    const byMessage = this.spent.get(who) ?? new Map();
+    byMessage.set(id, {
+      use: { input: n(u.input_tokens), output: n(u.output_tokens), cacheRead: n(u.cache_read_input_tokens), cacheWrite: n(u.cache_creation_input_tokens), thinking: n(u.output_tokens_details?.thinking_tokens), model: '' },
+      model: String(m.message?.model ?? ''),
+    });
+    this.spent.set(who, byMessage);
+  }
+
+  /** Le total de ce qu'un agent a consommé ; rien si Claude Code n'a pas donné le détail. */
+  private useOf(who: string): AgentUse | undefined {
+    const byMessage = this.spent.get(who);
+    this.spent.delete(who);
+    if (!byMessage?.size) return undefined;
+    const sum: AgentUse = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, thinking: 0, model: '' };
+    for (const { use, model } of byMessage.values()) {
+      sum.input += use.input; sum.output += use.output; sum.cacheRead += use.cacheRead; sum.cacheWrite += use.cacheWrite; sum.thinking += use.thinking;
+      if (model) sum.model = model;
+    }
+    return sum;
   }
 
   private stream(m: Json) {
@@ -336,6 +365,7 @@ export class Normalizer {
 
   private assistant(m: Json) {
     const who: string = m.parent_tool_use_id ?? 'chef';
+    if (who !== 'chef') this.spend(who, m);
     // la taille du contexte de Max (ce qu'il relit à chaque tour) : pour la jauge de la conversation
     if (who === 'chef') {
       const u = (m.message?.usage ?? {}) as Json;

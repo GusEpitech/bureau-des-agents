@@ -15,8 +15,11 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 
 ## Comment c'est fait
 
-- **`server/`** : `index.ts` (HTTP, WebSocket, sécurité), `bureau.ts` (les missions, les fichiers, les versions, l'historique),
+- **`server/`** : `index.ts` (HTTP, WebSocket, sécurité), `bureau.ts` (les missions : démarrage, séance Claude Code, fichiers, reprise),
   `claude.ts` (lance `claude -p` en stream-json et traduit sa sortie en événements du bureau), `team.ts` (les métiers et les consignes).
+  Les morceaux de `bureau.ts` qui se suffisent à eux-mêmes vivent à côté : `settings.ts` (valeurs par défaut et nettoyage des réglages),
+  `rules.ts` (le règlement), `branches.ts` (les branches git), `versions.ts` (les copies de rendus), `records.ts` (lire un enregistrement,
+  l'historique de l'équipe), `types.ts` (`State`, `Live`, `Current`), `util.ts`, `db.ts` (la base SQLite, ouverte une fois), `store.ts` (l'état : missions, réglages, quota, mission ouverte), `library.ts` (l'index de l'historique), `git.ts`, `mcp.ts`.
 - **Mode projet** : quand un dossier de travail est choisi (`settings.workdir`, sous la zone de saisie), la mission tourne dans ce
   dossier au lieu d'un dossier neuf de `Missions/`. Le serveur crée une branche git `bureau/…` (et refuse si le dépôt a des
   changements pas commités), Max et l'équipe reçoivent des consignes de développement (`projectPrompt`, `PROJECT_TEAM` dans
@@ -31,14 +34,17 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 - **La conversation** : le store garde toute la conversation (`chat`, affichée par `src/ui/Chat.tsx`, onglet du panneau). Une
   mission passée se rouvre (`resume` → `current`) depuis l'enregistrement, et la mission ouverte est rouverte au redémarrage
   (`currentId` dans l'état) : Max reprend sa séance Claude Code (`--resume`) au message suivant, avec tout son historique.
+- **La base SQLite** (`.bureau/bureau.db`, `node:sqlite`) : `store.ts` y garde l'état du bureau (tables `missions` et `kv` : réglages, quota, mission ouverte) ; un ancien `state.json` est migré une fois, puis renommé `state.json.migrated` (jamais supprimé). Sans `node:sqlite`, retour au fichier `state.json`. `library.ts` y range aussi un index (FTS5 pour la recherche de « Mes missions », tables `agents` et `turns` pour « Le bilan » : tokens par passage d'agent avec le détail entrée/sortie/cache/réflexion que `Normalizer` additionne message par message, `leave.use`). Les `.jsonl` restent la source de vérité de ce qui s'est passé : l'index se reconstruit tout seul (monte `SCHEMA` dans `library.ts` si ses tables changent), mais l'état, lui, n'est que dans la base : ne la supprime pas.
 - **`shared/protocol.ts`** : tous les messages entre le serveur et le navigateur, et les événements (`OfficeEvent`) : `start`, `hire`,
   `act`, `report`, `leave`, `file`, `ask`, `end`… **`shared/activity.ts`** : les métiers, leurs outils, les textes affichés.
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).
-- **`src/engine/`** : le monde (`world.ts` : robots, déplacements A*, chat, mode soirée), le dessin (`render.ts`, `room.ts`,
+- **`src/engine/`** : le monde (`world.ts` : les événements, le chat, le mode soirée ; `actor.ts` : un robot et ses gestes ; `nav.ts` : se déplacer
+  sans se coincer, A* dans `path.ts` ; `animate.ts` : pose et regard), le dessin (`render.ts`, `room.ts`,
   `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 368), la caméra et son réalisateur
   (`camera.ts`), les clics (`hits.ts`).
 - **`src/ui/`** : l'interface React. `Office.tsx` (le canevas, les bulles, la boucle d'animation), `Dialog.tsx` (Max et la boîte de
   saisie), `Rooms.tsx` (les fenêtres qu'on ouvre en cliquant), `interact.ts` (ce que fait chaque clic).
+- **Petites mises en scène** : un test qui échoue (commande `bash` qui ressemble à un test, ou n'importe quelle commande du métier « analyse ») fait lever le poing au robot (`Actor.angryUntil`, pose `fist`, yeux `angry`, `World.rage`). Le tableau du fond montre la semaine (`World.week`, message `week`) tant qu'il n'y a pas de plan. Le chat (`cat.ts`) vient voir ceux qui dorment (`sleepers`) et s'endort sur le clavier de Max quand son bureau est libre (`deskTaken`).
 - **`src/audio/`** : bruitages ZzFX, jukebox (`public/music/`), voix de Max (`public/voice/`).
 - **`public/demo/mission.json`** : une vraie mission enregistrée, rejouée quand le serveur n'est pas là (`scripts/make-demo.ts`).
 

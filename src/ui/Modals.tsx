@@ -2,7 +2,7 @@
 // les missions précédentes, les réglages, et les petites notifications.
 import { useEffect, useMemo, useState } from 'react';
 import { EFFORTS, mcpKey, roleInfo } from '../../shared/activity.ts';
-import type { Role } from '../../shared/protocol.ts';
+import type { MissionInfo, Role, SearchHit } from '../../shared/protocol.ts';
 import { BRANCH_TOKENS, branchName, DEFAULT_BRANCH_PATTERN } from '../../shared/branch.ts';
 import { sfx } from '../audio/sfx.ts';
 import { denseOf, projectModeOf, savePref, techOf, useOffice } from '../state/store.ts';
@@ -116,16 +116,46 @@ export function Viewer() {
 }
 
 /** Les missions précédentes : on peut les rejouer (pour filmer) ou ouvrir leur dossier. */
+/** Un extrait de la recherche : les mots trouvés (entre \u0001 et \u0002) sont mis en valeur. */
+function Snippet({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\u0001[^\u0002]*\u0002)/).map((part, i) =>
+        part.startsWith('\u0001') ? <mark key={i}>{part.slice(1, -1)}</mark> : <span key={i}>{part}</span>)}
+    </>
+  );
+}
+
+const HIT_KINDS: Record<string, string> = {
+  title: 'titre', demande: 'ta demande', max: 'Max', rapport: 'un rapport', tâche: 'une tâche', plan: 'le plan', fichier: 'un fichier', récap: 'le récap', remarque: 'ta remarque',
+};
+
 export function History() {
   const open = useOffice((s) => s.historyOpen);
   const missions = useOffice((s) => s.missions);
+  const found = useOffice((s) => s.found);
   const send = useOffice((s) => s.send);
   const connection = useOffice((s) => s.connection);
   const [project, setProject] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const q = query.trim();
+  // la recherche part un instant après la dernière touche
+  useEffect(() => {
+    if (!open || connection !== 'live' || !q) return;
+    const t = setTimeout(() => send({ t: 'search', q }), 200);
+    return () => clearTimeout(t);
+  }, [open, connection, q, send]);
   if (!open) return null;
   const close = () => useOffice.setState({ historyOpen: false });
   const projects = [...new Set(missions.map((m) => m.project ?? ''))];
-  const shown = project === null ? missions : missions.filter((m) => (m.project ?? '') === project);
+  const inProject = (m: MissionInfo) => project === null || (m.project ?? '') === project;
+  const searching = q !== '';
+  const fresh = searching && found?.q === q;
+  const byId = new Map(missions.map((m) => [m.id, m]));
+  const hits = fresh ? found.hits.filter((h) => byId.has(h.missionId) && inProject(byId.get(h.missionId)!)) : [];
+  const shown: { m: MissionInfo; hit?: SearchHit }[] = searching
+    ? hits.map((h) => ({ m: byId.get(h.missionId)!, hit: h }))
+    : missions.filter(inProject).map((m) => ({ m }));
   return (
     <div className="modal-back" onClick={close}>
       <div className="modal history" onClick={(e) => e.stopPropagation()}>
@@ -133,6 +163,16 @@ export function History() {
         <div className="modal-body">
           {connection !== 'live' && <p className="muted">Relie le bureau à Claude Code (npm start) pour retrouver tes missions.</p>}
           {connection === 'live' && !missions.length && <p className="muted">Aucune mission pour l’instant. La première t’attend en bas de l’écran.</p>}
+          {connection === 'live' && missions.length > 0 && (
+            <input
+              className="hist-search"
+              type="search"
+              placeholder="Chercher dans tes missions : un mot, un fichier, un ticket…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+          )}
           {projects.length > 1 && (
             <div className="chips">
               <button className={`chip ${project === null ? 'on' : ''}`} onClick={() => setProject(null)}>Tout</button>
@@ -141,7 +181,10 @@ export function History() {
               ))}
             </div>
           )}
-          {shown.map((m) => (
+          {searching && !fresh && <p className="muted small">Je cherche…</p>}
+          {searching && fresh && !shown.length && <p className="muted">Rien trouvé pour « {q} ». Essaie un autre mot, ou le début d’un mot.</p>}
+          {searching && fresh && shown.length > 0 && <p className="muted small">{plural(shown.length, 'mission trouvée', 'missions trouvées')}</p>}
+          {shown.map(({ m, hit }) => (
             <div key={m.id} className="hist">
               <div className="hist-id">
                 <b>{m.title}</b>
@@ -149,6 +192,7 @@ export function History() {
                   {m.project ? `🛠️ ${m.project}${m.branch ? ` · 🌿 ${m.branch}` : ''} · ` : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {plural(m.stats.agents, 'agent', 'agents')} · {plural(m.files.length, 'rendu', 'rendus')}
                   {m.status === 'working' ? ' · en cours' : m.status === 'done' ? '' : m.status === 'stopped' ? ' · arrêtée' : ' · en erreur'}
                 </span>
+                {hit && <span className="hist-snip small"><em>{HIT_KINDS[hit.kind] ?? hit.kind}</em> <Snippet text={hit.snippet} /></span>}
               </div>
               <div className="row">
                 <button className="btn small primary" title="Rouvre la conversation : son récap, ses fichiers, et tu peux la continuer avec Max" onClick={() => { sfx('click'); send({ t: 'resume', missionId: m.id }); }}>Ouvrir</button>

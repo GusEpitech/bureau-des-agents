@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { countStats, emptyStats, setProjectMode } from '../../shared/activity.ts';
 import type {
-  ActKind, ClaudeInfo, ClientMsg, DiffFile, McpServer, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
+  ActKind, AgentUse, ClaudeInfo, ClientMsg, DiffFile, McpServer, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, SearchHit, ServerMsg, Settings, Stats, TeamEntry, TurnUsage, VersionInfo,
 } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { say } from '../audio/voice.ts';
@@ -28,6 +28,8 @@ export interface AgentView {
   hiredAt: number;
   leftAt?: number;
   tokens: number;
+  /** le détail de ce qu'il a consommé (quand Claude Code le donne) */
+  use?: AgentUse;
   tools: number;
 }
 
@@ -108,6 +110,10 @@ interface S {
   /** les versions de chaque rendu (clé : mission|fichier) */
   versions: Record<string, VersionInfo[]>;
   teamHistory: TeamEntry[] | null;
+  /** le dernier résultat de la recherche dans l'historique */
+  found: { q: string; hits: SearchHit[] } | null;
+  /** le bilan de consommation (null : pas encore reçu ou base indisponible) */
+  usage: Stats | null;
   /** chaque version du plan, dans l'ordre (le tableau garde l'historique) */
   planHistory: { at: number; items: PlanItem[] }[];
   music: { playing: boolean; index: number; volume: number };
@@ -217,6 +223,8 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   modal: null,
   versions: {},
   teamHistory: null,
+  found: null,
+  usage: null,
   planHistory: [],
   music: { playing: false, index: 0, volume: 0.55 },
   voiceOn: pref('voice', true),
@@ -262,6 +270,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
     switch (m.t) {
       case 'hello': {
         set({ claude: m.claude, dir: m.dir, settings: m.settings, quota: m.quota, missions: m.missions });
+        get().send({ t: 'week' });
         if (s.replaying) break;
         if (m.current) {
           get().resetMission(m.current.mission);
@@ -299,6 +308,15 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         break;
       case 'versions':
         set({ versions: { ...s.versions, [`${m.missionId}|${m.file}`]: m.list } });
+        break;
+      case 'week':
+        if (m.days) bus.week(m.days);
+        break;
+      case 'stats':
+        set({ usage: m.stats });
+        break;
+      case 'search':
+        set({ found: { q: m.q, hits: m.hits } });
         break;
       case 'team_history':
         set({ teamHistory: m.entries });
@@ -433,7 +451,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
       case 'leave': {
         const a = s.agents[ev.who];
         if (!a) break;
-        set({ agents: { ...s.agents, [ev.who]: { ...a, status: ev.ok ? 'done' : 'failed', leftAt: at, tokens: ev.tokens, tools: ev.tools } } });
+        set({ agents: { ...s.agents, [ev.who]: { ...a, status: ev.ok ? 'done' : 'failed', leftAt: at, tokens: ev.tokens, tools: ev.tools, use: ev.use } } });
         break;
       }
       case 'file': {
@@ -464,6 +482,8 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         break;
       }
       case 'end': {
+        // le tableau du bureau compte la mission qui vient de finir (l'index se met à jour dans l'instant)
+        if (live) setTimeout(() => get().send({ t: 'week' }), 2500);
         const workMs = s.workMs + (s.busySince ? Math.max(0, at - s.busySince) : 0);
         // le récap de Max : souvent son dernier message, qui devient alors le récap (pas de doublon)
         const msgs = get().chat;

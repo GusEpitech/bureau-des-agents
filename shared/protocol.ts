@@ -65,7 +65,8 @@ export type OfficeEvent =
   /** le rapport qu'un agent rend au chef */
   | { k: 'report'; who: string; text: string }
   /** un agent a fini son travail et quitte son poste */
-  | { k: 'leave'; who: string; ok: boolean; tokens: number; tools: number; ms: number }
+  /** use : le détail de ce qu'il a consommé (absent des anciennes missions) */
+  | { k: 'leave'; who: string; ok: boolean; tokens: number; tools: number; ms: number; use?: AgentUse }
   | { k: 'file'; file: FileInfo; isNew: boolean }
   /** full = la bulle montre l'action en entier (sinon, on répond dans le panneau, où tout est affiché) */
   | { k: 'ask'; who: string; requestId: string; tool: string; label: string; detail: string; full: boolean }
@@ -74,11 +75,34 @@ export type OfficeEvent =
   | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean; usage?: TurnUsage }
   | { k: 'error'; message: string };
 
+/** Ce qu'un agent a consommé, message par message : entrée, sortie (réflexion comprise), cache, et le modèle. `thinking` : la part de la sortie passée à réfléchir. */
+export interface AgentUse { input: number; output: number; cacheRead: number; cacheWrite: number; thinking: number; model: string }
+
 /** Un événement daté, tel qu'il est enregistré. */
 /** Ce qu'a consommé un tour de conversation (le message « result » de Claude Code). */
 export interface TurnUsage { input: number; output: number; cacheRead?: number; cacheWrite?: number; costUsd?: number; turns?: number }
 
 export interface Logged { at: number; ev: OfficeEvent }
+
+/** Le bilan de consommation (tokens) sur une période. `team` : les agents ; `chef` : Max (ce qu'il relit à chaque tour compris). */
+export interface Stats {
+  days: number;
+  missions: number;
+  team: number;
+  chef: number;
+  costUsd: number;
+  /** output : ce que les agents ont écrit (réflexion comprise) ; thinking : la part passée à réfléchir (0 pour les anciennes missions) */
+  byRole: { role: Role; tokens: number; agents: number; output: number; thinking: number }[];
+  byProject: { project: string; missions: number; tokens: number }[];
+  byWeek: { week: number; missions: number; tokens: number }[];
+  top: { missionId: string; title: string; tokens: number; team: number }[];
+}
+
+/** Un jour du tableau du bureau : combien de missions et de tokens (`day` : minuit, heure de l'ordinateur). */
+export interface WeekDay { day: number; missions: number; tokens: number }
+
+/** Un résultat de la recherche dans l'historique : la mission, d'où vient l'extrait, et l'extrait (les mots trouvés sont entre \u0001 et \u0002). */
+export interface SearchHit { missionId: string; kind: string; snippet: string }
 
 /** Un connecteur MCP de Claude Code, tel qu'on peut le montrer (jamais ses arguments ni ses clés). */
 export interface McpServer {
@@ -113,6 +137,8 @@ export interface TeamEntry {
   tokens: number;
   ms: number;
   report: string;
+  /** le détail de ce qu'il a consommé (absent des anciennes missions) */
+  use?: AgentUse;
 }
 
 export interface Settings {
@@ -196,6 +222,12 @@ export type ClientMsg =
   | { t: 'read'; missionId: string; file: string; version?: string }
   | { t: 'versions'; missionId: string; file: string }
   | { t: 'team_history' }
+  /** cherche dans l'historique des missions */
+  | { t: 'search'; q: string }
+  /** le bilan de consommation sur les `days` derniers jours (0 : tout) */
+  | { t: 'stats'; days: number }
+  /** les 7 derniers jours, pour le tableau du bureau */
+  | { t: 'week' }
   | { t: 'replay'; missionId: string }
   | { t: 'settings'; settings: Partial<Settings> }
   /** ouvre la fenêtre de choix de dossier de l'ordinateur, pour choisir le dossier de travail */
@@ -223,6 +255,9 @@ export type ServerMsg =
   | { t: 'file_text'; missionId: string; file: string; text: string; truncated: boolean; version?: string }
   | { t: 'versions'; missionId: string; file: string; list: VersionInfo[] }
   | { t: 'team_history'; entries: TeamEntry[] }
+  | { t: 'search'; q: string; hits: SearchHit[] }
+  | { t: 'stats'; stats: Stats | null }
+  | { t: 'week'; days: WeekDay[] | null }
   | { t: 'quota'; quota: Quota }
   | { t: 'settings'; settings: Settings }
   | { t: 'toast'; kind: 'info' | 'error'; text: string }

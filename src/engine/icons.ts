@@ -162,6 +162,13 @@ const ROWS: Record<string, string[]> = {
     '.bbbbb.',
     '..bbb..',
   ],
+  anger: [
+    'rr...rr',
+    'r.r.r.r',
+    '..rrr..',
+    'r.r.r.r',
+    'rr...rr',
+  ],
   idea: [
     '..yyy..',
     '.yyOyy.',

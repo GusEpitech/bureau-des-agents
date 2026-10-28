@@ -12,6 +12,7 @@ export const camera = new Camera();
 export const director = new Director(camera, world);
 
 bus.on((ev, live) => { world.apply(ev, live); director.event(ev, live); });
+bus.onWeek((days) => { world.week = days; });
 bus.onReset(() => { world.resetAll(); camera.wide(); });
 
 /** L'heure du bureau : celle de ton ordinateur (en « auto »), ou celle que tu as choisie. */

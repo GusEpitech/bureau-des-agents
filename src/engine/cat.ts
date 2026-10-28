@@ -76,6 +76,8 @@ function sprite(pose: CatPose, frame: number, right: boolean) {
 
 /** Le canapé (là où il dort) et les endroits où il aime traîner. */
 const SOFA = { x: 3 * T + 4, y: 14 * T + 4, from: [3, 13] as Tile };
+/** Le clavier de Max : le chat s'y roule en boule quand le chef n'est pas à son bureau. `front` : la case devant le bureau. */
+const KEYS = { x: 11 * T, y: 7 * T + 4, front: [11, 8] as Tile, frontPx: { x: 11 * T + 8, y: 8 * T + 13 } };
 const HAUNTS: Tile[] = [[9, 10], [12, 10], [7, 13], [14, 13], [17, 13], [10, 9], [3, 9], [18, 9], [8, 6]];
 
 export class Cat {
@@ -87,12 +89,39 @@ export class Cat {
   private until = 8;
   private t = 0;
   private toSofa = false;
+  /** où il va : le canapé, le clavier de Max, ou ailleurs */
+  private goal: 'wander' | 'sofa' | 'keys' = 'wander';
+  /** il est venu voir quelqu'un dormir (il s'assoit d'abord, puis s'installe) */
+  private watching = false;
+  private curious = false;
+  private sawSleeper = false;
   heartUntil = 0;
+  /** combien de robots dorment en ce moment (renseigné par le monde) */
+  sleepers = 0;
+  /** le bureau de Max est occupé (renseigné par le monde) */
+  deskTaken = false;
+  /** vrai un instant quand on le chasse du clavier ; `arrived` : il vient d'arriver quelque part (lu et remis à zéro par le monde) */
+  startled = false;
+  arrived: '' | 'sleeper' | 'keys' = '';
 
   get tile(): Tile { return [Math.floor(this.x / T), Math.floor((this.y - 2) / T)]; }
 
   update(dt: number, time: number, grid: boolean[][], onZ: (x: number, y: number) => void) {
     this.t += dt;
+    // Max revient à son bureau : le chat saute du clavier
+    if (this.onKeys && this.deskTaken) {
+      this.startled = true;
+      this.goal = 'wander';
+      const target = HAUNTS[Math.floor(Math.random() * HAUNTS.length)];
+      const tiles = findPath(grid, KEYS.front, target);
+      this.path = [KEYS.frontPx, ...(tiles ?? []).map(tileFeet)].map((p) => ({ x: p.x, y: p.y - 2 }));
+      this.toSofa = false;
+    }
+    // quelqu'un s'endort : il a envie d'aller voir
+    if (this.sleepers > 0 && !this.sawSleeper) {
+      this.sawSleeper = true;
+      if (!this.path.length && !this.atSofa && !this.onKeys) { this.curious = true; this.until = Math.min(this.until, time + 2 + Math.random() * 4); }
+    } else if (this.sleepers === 0) this.sawSleeper = false;
     if (this.path.length) {
       const p = this.path[0];
       const dx = p.x - this.x, dy = p.y - this.y;
@@ -103,20 +132,43 @@ export class Cat {
       else { this.x += (dx / d) * step; this.y += (dy / d) * step; }
       this.pose = 'walk';
       if (!this.path.length) {
-        this.pose = this.toSofa ? 'sleep' : 'sit';
-        this.until = time + (this.toSofa ? 25 + Math.random() * 25 : 4 + Math.random() * 6);
+        if (this.goal === 'keys') {
+          this.pose = 'sleep';
+          this.until = time + 30 + Math.random() * 30;
+          this.arrived = 'keys';
+        } else if (this.watching) {
+          this.pose = 'sit';
+          this.until = time + 4 + Math.random() * 2;
+          this.arrived = 'sleeper';
+        } else {
+          this.pose = this.toSofa ? 'sleep' : 'sit';
+          this.until = time + (this.toSofa ? 25 + Math.random() * 25 : 4 + Math.random() * 6);
+        }
       }
       return true;
     }
     if (this.pose === 'sleep' && Math.floor(this.t * 0.8) !== Math.floor((this.t - dt) * 0.8)) onZ(this.x + 6, this.y - 10);
     if (time < this.until) return false;
-    // en route : vers un coin du bureau, ou vers le canapé pour une sieste
-    this.toSofa = Math.random() < 0.3;
-    const target = this.toSofa ? SOFA.from : HAUNTS[Math.floor(Math.random() * HAUNTS.length)];
+    // il a regardé le dormeur assez longtemps : il s'installe à côté
+    if (this.watching) {
+      this.watching = false;
+      this.pose = 'sleep';
+      this.until = time + 25 + Math.random() * 25;
+      return false;
+    }
+    // en route : vers un coin du bureau, le canapé pour une sieste, ou le clavier de Max
+    this.watching = false;
+    const r = Math.random();
+    this.goal = this.curious || (this.sleepers > 0 && r < 0.45) ? 'sofa' : !this.deskTaken && r < 0.35 ? 'keys' : r < 0.6 ? 'sofa' : 'wander';
+    this.toSofa = this.goal === 'sofa';
+    this.watching = this.toSofa && (this.curious || this.sleepers > 0);
+    this.curious = false;
+    const target = this.goal === 'keys' ? KEYS.front : this.toSofa ? SOFA.from : HAUNTS[Math.floor(Math.random() * HAUNTS.length)];
     const tiles = findPath(grid, this.tile, target);
-    if (!tiles) { this.until = time + 3; return false; }
+    if (!tiles) { this.until = time + 3; this.watching = false; this.goal = 'wander'; return false; }
     this.path = tiles.map(tileFeet).map((p) => ({ x: p.x, y: p.y - 2 }));
     if (this.toSofa) this.path.push({ x: SOFA.x, y: SOFA.y });
+    if (this.goal === 'keys') this.path.push({ x: KEYS.x, y: KEYS.y });
     return true;
   }
 
@@ -128,13 +180,19 @@ export class Cat {
     this.heartUntil = time + 1.2;
   }
 
+  /** Il est sur le canapé (assis ou endormi) */
+  private get atSofa() { return !this.path.length && Math.abs(this.x - SOFA.x) < 2 && Math.abs(this.y - SOFA.y) < 3; }
+
+  /** Il dort sur le clavier de Max */
+  get onKeys() { return !this.path.length && this.goal === 'keys' && Math.abs(this.x - KEYS.x) < 2 && Math.abs(this.y - KEYS.y) < 3; }
+
   /** Il dort sur le canapé (les robots s'assoient alors à côté, sans le déranger). */
-  get onSofa() { return this.pose === 'sleep' && !this.path.length && Math.abs(this.x - SOFA.x) < 2; }
+  get onSofa() { return this.pose === 'sleep' && this.atSofa; }
 
   get frame() { return Math.floor(this.t * 6) % 2; }
 
   /** Sur le canapé, il passe devant (sinon le dossier le cacherait). */
-  get sortY() { return this.pose === 'sleep' && !this.path.length && Math.abs(this.x - SOFA.x) < 2 ? 14 * T + 15 : this.y; }
+  get sortY() { return this.atSofa ? 14 * T + 15 : this.onKeys ? 8 * T + 4 : this.y; }
 
   draw(g: CanvasRenderingContext2D) {
     const s = sprite(this.pose, this.frame, this.right);
