@@ -22,6 +22,7 @@ export const perf = { frames: 0, ms: 0 };
 
 /** Les bulles accrochées aux robots : on les déplace à chaque image, sans repasser par React. */
 const bubbleEls = new Map<string, HTMLElement>();
+const widths = new WeakMap<HTMLElement, { key: string; half: number }>();
 
 function placeBubbles(scale: number) {
   const stageW = W * scale;
@@ -40,7 +41,11 @@ function placeBubbles(scale: number) {
     const b = el.firstElementChild as HTMLElement | null;
     let dx = 0;
     if (b) {
-      const half = b.offsetWidth / 2;
+      // la largeur de la bulle ne change qu'avec son texte ou la taille du bureau : on ne la mesure (ce qui force une mise en page) que là
+      const key = `${scale}|${b.textContent}`;
+      let m = widths.get(el);
+      if (!m || m.key !== key) { m = { key, half: b.offsetWidth / 2 }; widths.set(el, m); }
+      const half = m.half;
       if (x - half < 4) dx = 4 - (x - half);
       else if (x + half > stageW - 4) dx = stageW - 4 - (x + half);
     }
@@ -78,8 +83,8 @@ export function Office() {
     return () => ro.disconnect();
   }, [vertical]);
 
-  // La boucle d'animation : 24 images par seconde quand ça bouge, 8 au repos, rien quand l'onglet est caché.
-  // Le bureau est dessiné en tout petit (352 × 256) : des pixels nets à n'importe quelle taille.
+  // La boucle d'animation : 24 images par seconde en mission, 15 quand seule l'équipe se balade, 8 au repos, rien quand l'onglet est caché.
+  // Le bureau est dessiné en tout petit (352 × 368) : des pixels nets à n'importe quelle taille.
   useEffect(() => {
     const vis = canvas.current!;
     const vg = vis.getContext('2d')!;
@@ -121,7 +126,7 @@ export function Office() {
       const m = cap?.music?.();
       const level = m ? m.level : jukebox.sample();
       world.setMusic(m ? m.on : jukebox.playing, level, m ? m.beat : jukebox.beat);
-      if (!cap && acc < (active || camMoving ? 1 / 24 : 1 / 8)) return;
+      if (!cap && acc < (camMoving || (active && !world.calm) ? 1 / 24 : active ? 1 / 15 : 1 / 8)) return;
       const t0 = performance.now();
       active = world.update(acc);
       acc = 0;
@@ -317,7 +322,7 @@ function Bubble({ id, v }: { id: string; v: View }) {
     else bubbleEls.delete(id);
   }, [id]);
   return (
-    <div className={`bubble-anchor ${id === 'chef' ? 'is-chef' : ''}`} ref={ref} style={{ ['--c' as string]: v.color }}>
+    <div className={`bubble-anchor ${id === 'chef' ? 'is-chef' : ''} ${v.mode === 'ask' ? 'on-top' : v.mode === 'full' ? 'above' : ''}`} ref={ref} style={{ ['--c' as string]: v.color }}>
       {v.mode === 'ask' && v.ask ? <AskBubble ask={v.ask} name={v.name} />
         : v.mode === 'full' ? (
           <div className="bubble">

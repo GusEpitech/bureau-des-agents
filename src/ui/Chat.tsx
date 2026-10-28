@@ -7,6 +7,7 @@ import { usageLine } from './tech.ts';
 import { ToolGroup } from './Tech.tsx';
 import { copyText, mdToHtml } from './md.ts';
 import { tidy } from './tidy.ts';
+import { branchFromPlan, tidyBranch } from '../../shared/branch.ts';
 
 const time = (at: number) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
@@ -63,7 +64,21 @@ function PlanMessage({ m }: { m: ChatMsg }) {
   const [note, setNote] = useState('');
   const state = m.plan ?? 'pending';
   const live = state === 'pending' && !replaying && !!m.requestId;
-  const approve = () => { sfx('yes'); send({ t: 'answer', requestId: m.requestId!, allow: true }); };
+  // le nom de la branche : celui que Max propose dans son plan (sinon l'actuel), que tu peux changer avant de valider
+  const mission = useOffice((s) => s.mission);
+  const pattern = useOffice((s) => s.settings.branchPattern);
+  const proposed = useMemo(
+    () => (mission?.project ? branchFromPlan(m.text, pattern, { prompt: mission.prompt, project: mission.project, createdAt: mission.createdAt }) || mission.branch || '' : ''),
+    [m.text, pattern, mission?.project, mission?.prompt, mission?.createdAt, mission?.branch],
+  );
+  const [branch, setBranch] = useState<string | null>(null);
+  const shown = branch ?? proposed;
+  const showBranch = live && !!mission?.project && !!mission.branch;
+  const approve = () => {
+    sfx('yes');
+    const wanted = tidyBranch(shown);
+    send({ t: 'answer', requestId: m.requestId!, allow: true, ...(wanted && wanted !== mission?.branch ? { branch: wanted } : {}) });
+  };
   const changes = () => {
     if (!note.trim()) return;
     sfx('no');
@@ -78,6 +93,12 @@ function PlanMessage({ m }: { m: ChatMsg }) {
         <em className={`plan-state ${state}`}>{PLAN_STATE[state]}</em>
       </div>
       <div className="chat-bubble md" dangerouslySetInnerHTML={{ __html: html }} />
+      {showBranch && !editing && (
+        <label className="plan-branch" title="Le nom de la branche git de cette mission. Change-le comme tu veux : le travail continue dessus.">
+          <span>🌿 Branche</span>
+          <input value={shown} spellCheck={false} onChange={(e) => setBranch(e.target.value)} onBlur={() => branch !== null && setBranch(tidyBranch(branch))} />
+        </label>
+      )}
       {live && !editing && (
         <div className="plan-actions">
           <button className="btn small primary" onClick={approve}>Valider le plan</button>
@@ -118,9 +139,12 @@ export function ChatSection() {
   const stick = useRef(true);
 
   // on suit le bas de la conversation, sauf si tu es remonté la relire
+  // (une seule fois par image : lire scrollHeight force une mise en page, trop cher à chaque message)
   useEffect(() => {
     const b = box.current;
-    if (b && stick.current) b.scrollTop = b.scrollHeight;
+    if (!b || !stick.current) return;
+    const id = requestAnimationFrame(() => { b.scrollTop = b.scrollHeight; });
+    return () => cancelAnimationFrame(id);
   }, [chat.length, typing]);
 
   return (

@@ -849,3 +849,19 @@ body.resizing { cursor: col-resize; user-select: none; }
 .energy.unknown .energy-label { color: var(--dim); }
 .energy.measuring .energy-bar { animation: pulse-red 1s infinite; }
 .energy-bar i { transition: width 0.6s ease; }
+
+/* Une longue conversation : les messages hors de l'écran ne sont ni mis en page ni dessinés (bien moins de travail à chaque nouveau message) */
+.chat > .chat-msg, .chat > .chat-note, .chat > .tool-group { content-visibility: auto; contain-intrinsic-size: auto 72px; }
+
+.plan-branch { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12px; }
+.plan-branch span { flex: none; opacity: 0.8; }
+.plan-branch input { flex: 1; min-width: 0; font: 12px ui-monospace, monospace; padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: rgba(0,0,0,0.25); color: inherit; }
+.plan-branch input:focus { outline: none; border-color: rgba(var(--accent-rgb, 255, 138, 61), 0.8); }
+
+/* un robot qui passe derrière une bulle : c'est la bulle qui est devant, son prénom est masqué */
+.bubble-anchor.above { z-index: 3; }
+.bubble-anchor.on-top { z-index: 4; }
+
+.quick-toggle { font: 700 11px var(--pixel); padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: transparent; color: inherit; opacity: 0.75; cursor: pointer; }
+.quick-toggle:hover { opacity: 1; }
+.quick-toggle.on { opacity: 1; color: #1b1300; background: #ffd166; border-color: #ffd166; }

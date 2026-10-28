@@ -10,7 +10,7 @@ import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, w
 import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats } from '../shared/activity.ts';
-import { branchName, DEFAULT_BRANCH_PATTERN } from '../shared/branch.ts';
+import { branchFromPlan, branchName, DEFAULT_BRANCH_PATTERN, tidyBranch } from '../shared/branch.ts';
 import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
 import { mcpList } from './mcp.ts';
 import { ClaudeProcess, freshQuota, measureQuota, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
@@ -44,7 +44,7 @@ Le dossier caché « .bureau » garde l'état du bureau et l'enregistrement de c
 Tu peux le supprimer pour tout recommencer.
 `;
 
-const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN };
+const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false };
 const CHEF_MODELS = ['', 'sonnet', 'opus', 'haiku', 'fable'];
 const TEAM_MODELS = ['sonnet', 'haiku', 'opus', 'fable', 'inherit'];
 const MODEL_ROLES: Role[] = ['recherche', 'code', 'design', 'redaction', 'analyse'];
@@ -193,6 +193,7 @@ export class Bureau {
       // le dernier dossier choisi passe en tête de la liste (le navigateur ne peut pas la modifier)
       recent: workdir ? [workdir, ...cur.recent.filter((d) => d !== workdir)].slice(0, MAX_RECENT) : cur.recent,
       branchPattern: typeof p.branchPattern === 'string' ? p.branchPattern.trim().slice(0, 100) || DEFAULT_BRANCH_PATTERN : cur.branchPattern,
+      quick: typeof p.quick === 'boolean' ? p.quick : cur.quick,
     };
     this.save();
     this.broadcast({ t: 'settings', settings: this.state.settings });
@@ -305,7 +306,7 @@ export class Bureau {
 
     const mission: MissionInfo = {
       id: 'm' + Date.now().toString(36), title, prompt: text, folder, createdAt: Date.now(), workMs: 0,
-      status: 'working', stats: emptyStats(), files: [], project, branch: git?.branch, baseBranch: git?.base,
+      status: 'working', stats: emptyStats(), files: [], project, branch: git?.branch, baseBranch: git?.base, quick: project && this.settings.quick ? true : undefined,
     };
     this.state.missions.push(mission);
     this.state.currentId = mission.id;
@@ -350,6 +351,49 @@ export class Bureau {
     return { branch, base };
   }
 
+  /**
+   * Le plan validé commence par « Branche : ticket | titre » : Max a lu le ticket, le bureau renomme alors la branche
+   * (créée au départ d'après la seule demande) avec le modèle des réglages. Seulement si elle n'a pas bougé.
+   */
+  private renameBranch(cur: Current, input: unknown, chosen?: string) {
+    const m = cur.mission;
+    if (!m.project || !m.branch) return;
+    let wanted = chosen ? tidyBranch(chosen) : '';
+    if (!wanted) {
+      const plan = typeof (input as { plan?: unknown } | null)?.plan === 'string' ? (input as { plan: string }).plan : '';
+      wanted = branchFromPlan(plan, this.settings.branchPattern, { prompt: m.prompt, project: m.project, createdAt: m.createdAt });
+    }
+    if (!wanted || wanted === m.branch) return;
+    const git = (...args: string[]) => execFileSync('git', ['-C', m.folder, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    try {
+      if (this.currentBranch(m.folder) !== m.branch) return;
+      let branch = wanted;
+      for (let n = 2; this.gitHas(git, branch); n++) branch = `${wanted}-${n}`;
+      git('check-ref-format', '--branch', branch);
+      git('branch', '-m', m.branch, branch);
+      m.branch = branch;
+      this.save();
+      this.broadcast({ t: 'mission', mission: m });
+    } catch { /* on garde le nom du départ : le travail continue quoi qu'il arrive */ }
+  }
+
+  /**
+   * Tu as renommé la branche toi-même (dans un terminal, avant de pousser) : la mission suit le nouveau nom
+   * au lieu de se plaindre. Seulement si l'ancienne n'existe plus et que le dossier est sur une autre branche.
+   */
+  private followBranch(m: MissionInfo) {
+    if (!m.project || !m.branch) return;
+    const git = (...args: string[]) => execFileSync('git', ['-C', m.folder, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    try {
+      if (this.gitHas(git, m.branch)) return;
+      const now = this.currentBranch(m.folder);
+      if (!now || now === m.baseBranch) return;
+      m.branch = now;
+      this.save();
+      this.broadcast({ t: 'mission', mission: m });
+    } catch { /* tant pis */ }
+  }
+
   private gitHas(git: (...a: string[]) => string, branch: string) {
     try { git('rev-parse', '--verify', '--quiet', `refs/heads/${branch}`); return true; } catch { return false; }
   }
@@ -367,6 +411,7 @@ export class Bureau {
     if (!clean) return;
     if (!this.claude) throw new Error('Claude Code n’est pas installé sur cet ordinateur.');
     // une retouche sur une autre branche que celle de la mission mélangerait les travaux
+    if (cur.mission.status !== 'working') this.followBranch(cur.mission);
     const branch = cur.mission.branch;
     if (branch && cur.mission.status !== 'working') {
       const now = this.currentBranch(cur.mission.folder);
@@ -375,7 +420,7 @@ export class Bureau {
     let l = cur.live;
     if (!l || !l.proc.alive) l = this.spawn(cur);
     // mode projet : chaque nouvelle demande repasse par un plan à valider (une précision en plein travail, non)
-    else if (this.ownFolder(cur.mission) && cur.mission.status !== 'working') l.proc.setPermissionMode('plan');
+    else if (this.ownFolder(cur.mission) && !cur.mission.quick && cur.mission.status !== 'working') l.proc.setPermissionMode('plan');
     if (cur.idleTimer) { clearTimeout(cur.idleTimer); cur.idleTimer = null; }
     l.lastText = clean;
     cur.stopAsked = false;
@@ -407,11 +452,12 @@ export class Bureau {
     const proc: ClaudeProcess = new ClaudeProcess(
       {
         // mode projet : Max commence en mode plan (il explore, puis te soumet son plan avant de coder)
-        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: this.ownFolder(cur.mission) ? 'plan' : this.workMode(),
+        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: this.ownFolder(cur.mission) && !cur.mission.quick ? 'plan' : this.workMode(),
         model: s.chefModel || undefined, resume, tools: SESSION_TOOLS, allowedTools: ALWAYS_ALLOWED,
         agents: agentsJson(s, this.ownFolder(cur.mission)),
-        appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
+        appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch, !!cur.mission.quick), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
         restricted: !this.ownFolder(cur.mission),
+        solo: !!cur.mission.quick,
       },
       (m) => {
         if (cur.live?.proc !== proc) return; // un ancien processus qui parle encore
@@ -496,6 +542,7 @@ export class Bureau {
     this.broadcast({ t: 'mission', mission: m });
     this.save();
     void this.refreshQuota(true); // la jauge d'énergie se met à jour à chaque fin de mission
+    if (this.ownFolder(m)) void this.syncProjectFiles(cur);
     // Max reste disponible un moment pour les retouches, puis s'endort (il reprendra sa séance si on lui reparle)
     if (cur.idleTimer) clearTimeout(cur.idleTimer);
     cur.idleTimer = setTimeout(() => {
@@ -542,6 +589,8 @@ export class Bureau {
 
   // ── Les fichiers produits par l'équipe ──
   private watch(cur: Current) {
+    // en mode projet, on ne surveille pas tout le dépôt (node_modules, .git… : des milliers de dossiers) : git dit ce qui a changé, en fin de tour
+    if (this.ownFolder(cur.mission)) return;
     const folder = cur.mission.folder;
     try {
       cur.watcher = watch(folder, { recursive: true }, (_type, name) => {
@@ -554,6 +603,15 @@ export class Bureau {
       });
       cur.watcher.on('error', () => {});
     } catch { cur.watcher = null; }
+  }
+
+  /** Mode projet : les fichiers que git voit changés deviennent les rendus de la mission. */
+  private async syncProjectFiles(cur: Current) {
+    for (const rel of await gitOps.changedFiles(cur.mission.folder)) {
+      if (this.current !== cur) return;
+      if (rel.split('/').some((p) => IGNORED_DIRS.has(p))) continue;
+      await this.fileChanged(cur, rel);
+    }
   }
 
   private async fileChanged(cur: Current, rel: string) {
@@ -661,7 +719,7 @@ export class Bureau {
     else this.finish(cur, false, cur.lastChefText, 0, true);
   }
 
-  answer(requestId: string, allow: boolean, message?: string) {
+  answer(requestId: string, allow: boolean, message?: string, branch?: string) {
     const cur = this.current;
     const l = cur?.live;
     if (!cur || !l || !l.norm.hasRequest(requestId)) return;
@@ -670,12 +728,15 @@ export class Bureau {
     // le plan de Max : refusé avec tes remarques, il le corrige et le repropose
     const deny = plan
       ? note
-        ? `Ton patron veut des changements au plan : ${note}\nCorrige le plan en tenant compte de ses remarques, puis repropose-le avec ExitPlanMode. N'écris pas encore de code.`
-        : 'Ton patron n’a pas validé le plan. Demande-lui ce qu’il veut changer, sans écrire de code.'
+        ? `Gus veut des changements au plan : ${note}\nCorrige le plan en tenant compte de ses remarques, puis repropose-le avec ExitPlanMode. N'écris pas encore de code.`
+        : 'Gus n’a pas validé le plan. Demande-lui ce qu’il veut changer, sans écrire de code.'
       : note;
     l.proc.answerPermission(requestId, allow, l.norm.inputOf(requestId), allow ? undefined : deny);
     // plan validé : Max quitte le mode plan et travaille avec le mode de permission réglé
-    if (plan && allow) l.proc.setPermissionMode(this.workMode());
+    if (plan && allow) {
+      l.proc.setPermissionMode(this.workMode());
+      this.renameBranch(cur, l.norm.inputOf(requestId), branch);
+    }
     l.norm.forgetRequest(requestId);
     this.record(cur, { k: 'ask_done', requestId, allow, ...(!allow && note ? { message: note.slice(0, 4000) } : {}) });
   }
@@ -704,6 +765,7 @@ export class Bureau {
     if (!m) throw new Error('Cette mission n’existe plus.');
     if (!m.project) throw new Error('Les actions git n’existent qu’en mode projet.');
     if (!existsSync(m.folder)) throw new Error('Le dossier de cette mission n’existe plus.');
+    if (m.status !== 'working') this.followBranch(m);
     return m;
   }
 

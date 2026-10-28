@@ -4,7 +4,7 @@ import { icon, type IconName } from './icons.ts';
 import { P } from './pixels.ts';
 
 interface Particle {
-  kind: 'spark' | 'confetti' | 'data' | 'steam' | 'icon' | 'paper' | 'beam';
+  kind: 'spark' | 'confetti' | 'data' | 'steam' | 'smoke' | 'icon' | 'paper' | 'beam';
   x: number; y: number; vx: number; vy: number;
   life: number; max: number;
   color: string;
@@ -20,7 +20,7 @@ export class Fx {
   list: Particle[] = [];
 
   /** vrai s'il se passe quelque chose (la vapeur du café, discrète, ne compte pas) */
-  get busy() { return this.list.some((p) => p.kind !== 'steam'); }
+  get busy() { return this.list.some((p) => p.kind !== 'steam' && p.kind !== 'smoke'); }
 
   /** La colonne de lumière d'une arrivée ou d'un départ. */
   beam(x: number, y: number, color = P.orangeLight) {
@@ -83,6 +83,11 @@ export class Fx {
     this.list.push({ kind: 'paper', x: from.x, y: from.y, vx: 0, vy: 0, life: 0, max: 0.7, color: P.paper, size: 1, gravity: 0, from, to, arc: -18, onEnd });
   }
 
+  /** La fumée d'une cigarette : monte lentement, grise, et s'efface. */
+  smoke(x: number, y: number) {
+    this.list.push({ kind: 'smoke', x, y, vx: 1.5 + Math.random() * 2, vy: -7 - Math.random() * 3, life: 0, max: 2.2, color: '#cfcad8', size: 1, gravity: 0 });
+  }
+
   steam(x: number, y: number) {
     this.list.push({ kind: 'steam', x: x + (Math.random() - 0.5) * 2, y, vx: (Math.random() - 0.5) * 2, vy: -6 - Math.random() * 4, life: 0, max: 1.4, color: '#ffffff', size: 1, gravity: 0 });
   }
@@ -138,6 +143,13 @@ export class Fx {
           g.fillStyle = P.paperLine;
           g.fillRect(x - 1, y - 1, 3, 1);
           g.fillRect(x - 1, y + 1, 2, 1);
+          break;
+        case 'smoke':
+          // un voile sombre dessous : la fumée se voit aussi devant un robot clair
+          g.fillStyle = `rgba(30,24,50,${0.3 * (1 - t)})`;
+          g.fillRect(x - 1, y - 1, t > 0.4 ? 4 : 3, t > 0.4 ? 4 : 3);
+          g.fillStyle = `rgba(240,238,248,${0.85 * (1 - t)})`;
+          g.fillRect(x, y, t > 0.4 ? 2 : 1, t > 0.4 ? 2 : 1);
           break;
         case 'steam':
           g.fillStyle = `rgba(255,255,255,${0.35 * (1 - t)})`;

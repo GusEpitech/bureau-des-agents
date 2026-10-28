@@ -147,7 +147,7 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
       bureau.stop(m.force === true);
       break;
     case 'answer':
-      bureau.answer(str(m.requestId, 100), m.allow === true, m.message ? str(m.message, 4000) : undefined);
+      bureau.answer(str(m.requestId, 100), m.allow === true, m.message ? str(m.message, 4000) : undefined, m.branch ? str(m.branch, 200) : undefined);
       break;
     case 'new':
       bureau.close();

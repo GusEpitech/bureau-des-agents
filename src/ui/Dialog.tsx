@@ -264,6 +264,7 @@ function Composer() {
 function FolderPick() {
   const workdir = useOffice((s) => s.settings.workdir);
   const recent = useOffice(useShallow((s) => s.settings.recent));
+  const quick = useOffice((s) => s.settings.quick);
   const send = useOffice((s) => s.send);
   const choose = (v: string) => {
     sfx('click');
@@ -283,7 +284,14 @@ function FolderPick() {
         )}
         <option value={'\0pick'}>Choisir un autre dossier…</option>
       </select>
-      {workdir && <span className="small muted">une branche git par mission</span>}
+      {workdir && (
+        <button
+          className={`quick-toggle ${quick ? 'on' : ''}`}
+          title={quick ? 'Mode rapide : Max fait la petite tâche tout seul, sans plan ni équipe. Clique pour revenir au mode complet.' : 'Mode complet : Max fait un plan que tu valides, puis envoie son équipe. Clique pour passer en mode rapide (petites tâches).'}
+          onClick={() => { sfx('click'); send({ t: 'settings', settings: { quick: !quick } }); }}
+        >⚡ Rapide</button>
+      )}
+      {workdir && <span className="small muted">{quick ? 'Max fait tout seul, sans plan' : 'une branche git par mission'}</span>}
     </div>
   );
 }

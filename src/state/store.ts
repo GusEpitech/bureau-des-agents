@@ -164,11 +164,33 @@ let lastActSound = 0;
 const MAX_ACTS = 80;
 const MAX_FEED = 160;
 
-export const useOffice = create<S>((set, get) => ({
+/**
+ * Rejouer une mission (réouverture, démarrage) applique des milliers d'événements d'affilée. Pendant ce temps le
+ * store travaille sur une copie, et le navigateur n'est prévenu qu'une fois, à la fin : un seul affichage au lieu de milliers.
+ */
+let bulk: S | null = null;
+export function inBulk(fn: () => void) {
+  if (bulk) { fn(); return; }
+  bulk = useOffice.getState();
+  try { fn(); } finally {
+    const end = bulk;
+    bulk = null;
+    useOffice.setState(end, true);
+  }
+}
+
+export const useOffice = create<S>((rawSet, rawGet) => {
+  const get = (): S => bulk ?? rawGet();
+  const set: typeof rawSet = (p, replace) => {
+    if (!bulk) { rawSet(p as never, replace as never); return; }
+    const patch = typeof p === 'function' ? p(bulk) : p;
+    bulk = replace ? (patch as S) : { ...bulk, ...patch };
+  };
+  return {
   connection: 'connecting',
   claude: null,
   dir: '',
-  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN },
+  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false },
   quota: null,
   missions: [],
   mission: null,
@@ -240,7 +262,7 @@ export const useOffice = create<S>((set, get) => ({
         if (s.replaying) break;
         if (m.current) {
           get().resetMission(m.current.mission);
-          for (const l of m.current.log) get().apply(l.ev, l.at, false);
+          inBulk(() => { for (const l of m.current!.log) get().apply(l.ev, l.at, false); });
           set({ mission: m.current.mission });
         } else get().resetMission(null);
         break;
@@ -263,7 +285,7 @@ export const useOffice = create<S>((set, get) => ({
       case 'current':
         if (s.replaying) break;
         get().resetMission(m.mission);
-        for (const l of m.log) get().apply(l.ev, l.at, false);
+        inBulk(() => { for (const l of m.log) get().apply(l.ev, l.at, false); });
         set({ mission: m.mission, historyOpen: false });
         break;
       case 'closed':
@@ -467,7 +489,8 @@ export const useOffice = create<S>((set, get) => ({
     }
     bus.emit(ev, live);
   },
-}));
+  };
+});
 
 /** Les membres de l'équipe, dans l'ordre où ils sont arrivés. */
 export const teamList = (s: S) => s.order.map((id) => s.agents[id]).filter(Boolean);

@@ -33,6 +33,14 @@ export function interact(hit: Hit) {
       useOffice.setState({ draft: ' ' });
       return;
     }
+    const who = world.actors.get(hit.id);
+    if (who?.res && !who.onMission) {
+      // quelqu'un de l'équipe, sans mission : il discute, il salue
+      sfx('click');
+      who.happyUntil = world.time + 1.5;
+      st.toast('info', `${who.name} est en pause. Max l’appellera dès qu’il aura besoin de l’équipe.`);
+      return;
+    }
     sfx('open');
     useOffice.setState({ modal: { kind: 'agent', id: hit.id } });
     return;
@@ -52,7 +60,7 @@ export function interact(hit: Hit) {
     return;
   }
   if (id.startsWith('zone:')) { sfx('open'); useOffice.setState({ modal: { kind: 'team', role: hit.role } }); return; }
-  if (id.startsWith('plant-')) {
+  if (id.startsWith('plant-') || id.startsWith('tree-')) {
     const f = id;
     world.wiggle(f, 0, 0);
     sfx('tick');
@@ -65,13 +73,16 @@ export function interact(hit: Hit) {
     case 'rack': sfx('open'); useOffice.setState({ modal: { kind: 'machine' } }); return;
     case 'printer': sfx('open'); useOffice.setState({ modal: { kind: 'files' } }); return;
     case 'shelf': sfx('open'); useOffice.setState({ historyOpen: true }); return;
-    case 'door': sfx('open'); useOffice.setState({ modal: { kind: 'team' } }); return;
+    case 'door': case 'ashtray-l': case 'ashtray-r':
+      if (world.smokeBreak()) { sfx('click'); st.toast('info', 'Pause clope ! Fumer nuit gravement à la santé… mais pas à celle des robots.'); }
+      else st.toast('info', 'Personne n’est libre pour une pause clope : tout le monde travaille.');
+      return;
     case 'neon': world.neonNext(); sfx('check'); return;
     case 'window': { const n = TOD_NEXT[st.tod]; useOffice.setState({ tod: n }); savePref('tod', n); sfx('click'); return; }
     case 'coffee': world.coffee(); sfx('pour'); return;
     case 'cooler': world.cooler(); sfx('glug'); return;
-    case 'lamp': case 'lamp-r': world.toggleLamp(id); sfx('click'); return;
-    case 'easel': case 'bin': case 'tableLow': case 'sofa': world.wiggle(id, 0, 0); sfx('tick'); return;
+    case 'lamp': case 'lamp-r': case 'lamp-yard-l': case 'lamp-yard-r': world.toggleLamp(id); sfx('click'); return;
+    case 'bench-l': case 'bench-r': case 'easel': case 'bin': case 'tableLow': case 'sofa': world.wiggle(id, 0, 0); sfx('tick'); return;
     case 'poster': st.toast('info', QUOTES[Math.floor(Math.random() * QUOTES.length)]); sfx('click'); return;
     case 'jukebox': {
       // cinq clics rapides : c'est la fête

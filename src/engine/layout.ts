@@ -5,13 +5,18 @@ import type { Role } from '../../shared/protocol.ts';
 
 export const T = 16;
 export const COLS = 22;
-export const ROWS = 16;
+/** le bureau (16 rangées), puis la cour (rangées 16 à 21) et son mur avec le portail (rangée 22) */
+export const OFFICE_ROWS = 16;
+export const ROWS = 23;
 export const W = COLS * T;
 export const H = ROWS * T;
+export const OFFICE_H = OFFICE_ROWS * T;
+export const YARD_TOP = 16;
+export const YARD_BOTTOM = 21;
 
 export type FurnKind =
   | 'desk' | 'chefDesk' | 'chair' | 'chefChair' | 'plantBig' | 'plantTall' | 'plantSmall' | 'rack' | 'printer'
-  | 'cooler' | 'coffee' | 'sofa' | 'tableLow' | 'shelf' | 'lamp' | 'easel' | 'bin' | 'jukebox';
+  | 'cooler' | 'coffee' | 'sofa' | 'tableLow' | 'shelf' | 'lamp' | 'easel' | 'bin' | 'jukebox' | 'bench' | 'tree' | 'ashtray';
 
 export interface Furn {
   id: string;
@@ -94,13 +99,39 @@ furn.push({ id: 'plant-coffee', kind: 'plantBig', tx: 19, ty: 14, w: 1, h: 1, se
 furn.push({ id: 'lamp-r', kind: 'lamp', tx: 20, ty: 14, w: 1, h: 1 });
 furn.push({ id: 'bin', kind: 'bin', tx: 7, ty: 12, w: 0, h: 0 });
 
+// La cour (derrière la porte) : deux coins fumeurs avec leur cendrier, des bancs, des arbres, des lampadaires
+furn.push({ id: 'ashtray-l', kind: 'ashtray', tx: 4, ty: 18, w: 1, h: 1 });
+furn.push({ id: 'ashtray-r', kind: 'ashtray', tx: 17, ty: 18, w: 1, h: 1 });
+furn.push({ id: 'bench-l', kind: 'bench', tx: 2, ty: 20, w: 3, h: 1 });
+furn.push({ id: 'bench-r', kind: 'bench', tx: 17, ty: 20, w: 3, h: 1 });
+furn.push({ id: 'tree-l', kind: 'tree', tx: 1, ty: 17, w: 1, h: 1, seed: 4 });
+furn.push({ id: 'tree-r', kind: 'tree', tx: 20, ty: 17, w: 1, h: 1, seed: 8 });
+furn.push({ id: 'tree-bl', kind: 'tree', tx: 7, ty: 21, w: 1, h: 1, seed: 12 });
+furn.push({ id: 'tree-br', kind: 'tree', tx: 14, ty: 21, w: 1, h: 1, seed: 16 });
+furn.push({ id: 'plant-yard', kind: 'plantBig', tx: 8, ty: 17, w: 1, h: 1, seed: 25 });
+furn.push({ id: 'lamp-yard-l', kind: 'lamp', tx: 8, ty: 19, w: 1, h: 1 });
+furn.push({ id: 'lamp-yard-r', kind: 'lamp', tx: 13, ty: 19, w: 1, h: 1 });
+
 export const FURNITURE = furn;
 export const SEATS = seats;
 
 /** Les points de passage importants. Les pieds d'un robot debout sur une case : (x*16+8, y*16+13). */
 export const SPOTS = {
-  door: [10, 15] as [number, number],
-  doorOut: { x: 11 * T, y: 16 * T + 6 },
+  /** le portail de la cour : c'est par là qu'arrive (et repart) l'équipe */
+  door: [10, 22] as [number, number],
+  /** la porte du bureau, côté cour */
+  house: [10, 15] as [number, number],
+  /** là où l'équipe qui se balade s'arrête : machine à café, fontaine, fenêtres, jukebox, et les coins de discussion */
+  coffee: [[16, 13], [17, 13], [18, 13]] as [number, number][],
+  cooler: [[9, 5], [10, 5]] as [number, number][],
+  windows: [[2, 3], [4, 3], [17, 3], [19, 3]] as [number, number][],
+  jukebox: [[14, 13], [15, 13]] as [number, number][],
+  chat: [[[7, 10], [8, 10]], [[12, 10], [13, 10]], [[8, 13], [9, 13]]] as [[number, number], [number, number]][],
+  /** la pause clope : autour des cendriers de la cour */
+  smoke: [[3, 18], [5, 18], [4, 19], [4, 17], [16, 18], [18, 18], [17, 19], [17, 17]] as [number, number][],
+  /** un tour dans la cour */
+  yard: [[3, 16], [6, 18], [9, 16], [12, 16], [15, 16], [19, 19], [10, 20], [11, 18], [6, 20], [15, 19]] as [number, number][],
+  doorOut: { x: 11 * T, y: 23 * T + 6 },
   /** là où Max t'accueille, et où il te présente le rendu */
   reception: [10, 12] as [number, number],
   receptionPx: { x: 11 * T, y: 12 * T + 13 },
@@ -120,17 +151,21 @@ export const NEON = { x: 97, y: 11 };
 export const CLOCK = { x: 232, y: 13 };
 export const POSTER = { x: 252, y: 12, w: 10, h: 14 };
 export const DOOR = { x: 160, y: 228, w: 32, h: 28 };
+/** le portail, au bas de la cour */
+export const GATE = { x: 160, y: 22 * T - 4, w: 32, h: 24 };
 
 /** La grille des cases où l'on peut marcher. */
 export function walkGrid(): boolean[][] {
   const g: boolean[][] = [];
   for (let y = 0; y < ROWS; y++) {
     g.push([]);
-    for (let x = 0; x < COLS; x++) g[y].push(x >= 1 && x <= 20 && y >= 3 && y <= 14);
+    for (let x = 0; x < COLS; x++) g[y].push(x >= 1 && x <= 20 && ((y >= 3 && y <= 14) || (y >= YARD_TOP && y <= YARD_BOTTOM)));
   }
-  // la porte
+  // la porte du bureau, et le portail de la cour
   g[15][10] = true;
   g[15][11] = true;
+  g[22][10] = true;
+  g[22][11] = true;
   for (const f of FURNITURE) {
     for (let y = f.ty; y < f.ty + f.h; y++) for (let x = f.tx; x < f.tx + f.w; x++) if (g[y]?.[x] !== undefined) g[y][x] = false;
   }

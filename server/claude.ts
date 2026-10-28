@@ -56,6 +56,8 @@ export interface ProcessOptions {
    * Faux en mode projet : la séance suit ta config Claude Code (réglages, hooks, MCP, skills, agents, CLAUDE.md).
    */
   restricted: boolean;
+  /** mode rapide : le chef travaille seul, l'outil Agent n'existe pas */
+  solo?: boolean;
 }
 
 type Json = Record<string, any>;
@@ -91,7 +93,7 @@ export class ClaudeProcess {
     if (o.resume) args.push('--resume', o.resume);
     if (o.allowedTools.length) args.push('--allowedTools', o.allowedTools.join(','));
     // pas de questions à choix multiples : le chef pose ses questions dans la conversation
-    args.push('--disallowedTools', 'AskUserQuestion');
+    args.push('--disallowedTools', o.solo ? 'AskUserQuestion,Agent' : 'AskUserQuestion');
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       BUREAU_DES_AGENTS: '1',
@@ -141,7 +143,7 @@ export class ClaudeProcess {
       type: 'control_response',
       response: {
         subtype: 'success', request_id: requestId,
-        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: message || 'Le patron a dit non. Trouve une autre façon de faire, ou demande-lui.' },
+        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: message || 'Gus a dit non. Trouve une autre façon de faire, ou demande-lui.' },
       },
     });
   }
