@@ -861,3 +861,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 /* un robot qui passe derrière une bulle : c'est la bulle qui est devant, son prénom est masqué */
 .bubble-anchor.above { z-index: 3; }
 .bubble-anchor.on-top { z-index: 4; }
+
+.quick-toggle { font: 700 11px var(--pixel); padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: transparent; color: inherit; opacity: 0.75; cursor: pointer; }
+.quick-toggle:hover { opacity: 1; }
+.quick-toggle.on { opacity: 1; color: #1b1300; background: #ffd166; border-color: #ffd166; }

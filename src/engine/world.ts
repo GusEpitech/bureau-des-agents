@@ -51,6 +51,10 @@ export class Actor {
   /** la cigarette : jusqu'à quand il fume (pause clope) */
   smokeUntil = 0;
   nextPuff = 0;
+  /** ce qu'il fait de son temps libre : prendre des notes, regarder son téléphone, être assis ou dormir sur le canapé */
+  doing: '' | 'notes' | 'phone' | 'sofa' | 'sleep' = '';
+  /** sa place sur le canapé (0 gauche, 1 droite), -1 s'il n'y est pas */
+  slot = -1;
   // ── l'équipe qui vit au bureau : elle se balade en attendant, et prend un bureau quand Max l'appelle ──
   /** vrai pour un membre de l'équipe résidente */
   res = false;
@@ -61,6 +65,10 @@ export class Actor {
   /** la case qu'il occupe ou vers laquelle il va (pour que deux robots ne se superposent pas) */
   at: string | null = null;
   nextWander = 0;
+  /** sa vitesse de marche (chacun son rythme) */
+  pace = 1;
+  /** jusqu'à quand il ne s'écarte plus de personne (couloir trop étroit : on se croise, on ne reste pas coincé) */
+  ghostUntil = 0;
   sadUntil = 0;
   reported = false;
   delivered = false;
@@ -112,12 +120,17 @@ export function smokeTip(a: Actor, time = 0): Pt {
 }
 
 const MAX_RESIDENTS = 10;
+/** Les deux places du canapé, aux deux bouts : le milieu est la place du chat. `tile` : d'où on l'enjambe (derrière le dossier). */
+const SOFA_SLOTS: { x: number; y: number; tile: Tile }[] = [{ x: 38, y: 237, tile: [2, 13] }, { x: 74, y: 237, tile: [4, 13] }];
+/** « aucune case n'est tolérée » pour clear() */
+const NONE: Tile = [-9, -9];
 
 export class World {
   actors = new Map<string, Actor>();
   fx = new Fx();
   grid = walkGrid();
   private extraId = 0;
+  private slotUsed = new Set<number>();
   private seatOf = new Map<string, string>();
   private deliverTaken = new Set<number>();
   time = 0;
@@ -210,6 +223,7 @@ export class World {
       a.resName = name;
       a.dir = (['down', 'left', 'right'] as Dir[])[Math.floor(Math.random() * 3)];
       a.nextWander = this.time + 1 + Math.random() * 8;
+      a.pace = 0.88 + Math.random() * 0.24;
       this.actors.set(id, a);
       this.residents.add(a);
     }
@@ -280,6 +294,8 @@ export class World {
         { t: 'call', fn: () => { a.at = null; } },
       );
     };
+    const x = Math.random();
+    if (x < 0.4 && this.leisure(a, x, taken)) return;
     const r = Math.random();
     if (r < 0.22) { if (this.smokeBreak(a)) return; }
     if (r < 0.5) {
@@ -327,6 +343,60 @@ export class World {
     if (t) this.queue(a, { t: 'walk', tile: t }, { t: 'wait', ms: 1200 + Math.random() * 1500, dir: 'down' });
   }
 
+  /** Il arrête ce qu'il faisait de son temps libre (et libère sa place sur le canapé). */
+  private stopDoing(a: Actor) {
+    if (a.slot >= 0) { this.slotUsed.delete(a.slot); a.slot = -1; }
+    a.doing = '';
+  }
+
+  /** Un moment pour soi : des notes dans un carnet, le téléphone, le canapé, une sieste. Faux si rien n'est possible. */
+  private leisure(a: Actor, x: number, taken: Set<string | null>): boolean {
+    const free = this.freeTiles().filter((t) => !taken.has(t.join(',')));
+    const spot = free[Math.floor(Math.random() * free.length)];
+    if (x < 0.24) {
+      const phone = x >= 0.12;
+      // le téléphone se regarde volontiers dans la cour ; le carnet, n'importe où
+      const yard = phone && Math.random() < 0.5 ? SPOTS.yard.filter((s) => !taken.has(s.join(',')))[0] : null;
+      const at = yard ?? spot;
+      if (!at) return false;
+      const kind = phone ? 'phone' : 'notes';
+      a.at = at.join(',');
+      this.queue(a,
+        { t: 'walk', tile: at, face: 'down' },
+        { t: 'wait', ms: 400, dir: 'down' },
+        { t: 'call', fn: () => { a.doing = kind; if (!phone) this.fx.floatIcon(a.x, a.y - 24, 'idea'); } },
+        { t: 'wait', ms: 4500 + Math.random() * 4000, dir: 'down' },
+        { t: 'call', fn: () => { if (phone && Math.random() < 0.6) { this.fx.floatIcon(a.x, a.y - 24, 'heart'); a.happyUntil = this.time + 1.2; } a.doing = ''; a.at = null; } },
+      );
+      return true;
+    }
+    // le canapé : une place libre, et jamais sur le chat
+    const cat = this.cat;
+    const slot = SOFA_SLOTS.findIndex((s, i) => !this.slotUsed.has(i) && Math.hypot(cat.x - s.x, (cat.y - s.y) * 1.5) > 16);
+    if (slot < 0 || !this.grid[SOFA_SLOTS[slot].tile[1]]?.[SOFA_SLOTS[slot].tile[0]]) return false;
+    const s = SOFA_SLOTS[slot];
+    const sleep = x >= 0.34;
+    this.slotUsed.add(slot);
+    a.slot = slot;
+    a.at = s.tile.join(',');
+    this.queue(a,
+      { t: 'walk', tile: s.tile, face: 'down' },
+      // le chat dort : on s'installe à pas de loup
+      { t: 'call', fn: () => { a.doing = 'sofa'; } },
+      { t: 'slide', to: { x: s.x, y: s.y }, speed: cat.onSofa ? 14 : 32 },
+      { t: 'call', fn: () => {
+        a.doing = sleep ? 'sleep' : 'sofa';
+        a.dir = 'down';
+        if (cat.onSofa) { this.fx.floatIcon(a.x, a.y - 24, 'heart'); a.happyUntil = this.time + 1.2; }
+      } },
+      { t: 'wait', ms: sleep ? 14000 + Math.random() * 10000 : 7000 + Math.random() * 6000, dir: 'down' },
+      { t: 'call', fn: () => { a.doing = 'sofa'; if (sleep) this.fx.floatIcon(a.x, a.y - 24, 'idea'); } },
+      { t: 'slide', to: tileFeet(s.tile), speed: 32 },
+      { t: 'call', fn: () => { this.stopDoing(a); a.at = null; } },
+    );
+    return true;
+  }
+
   /** La vapeur du café, à la machine, devant lui. */
   private coffeeAt(spot: Tile) {
     for (let i = 0; i < 8; i++) this.fx.steam(spot[0] * T + 8 + Math.random() * 3, 13 * T + 4 - Math.random() * 4);
@@ -341,8 +411,8 @@ export class World {
     switch (task.t) {
       case 'walk': {
         if (a.seated) { a.seated = false; this.standUp(a); }
-        const tiles = findPath(this.grid, a.tile, task.tile);
-        a.path = (tiles ?? [task.tile]).map(tileFeet);
+        const tiles = findPath(this.grid, a.tile, task.tile) ?? this.nearestReach(a.tile, task.tile);
+        a.path = this.smooth(a, (tiles ?? [task.tile]).map(tileFeet), task.tile);
         if (task.then) a.path.push(task.then);
         break;
       }
@@ -355,6 +425,79 @@ export class World {
       case 'stand':
         if (a.seated) { a.seated = false; this.standUp(a); }
         break;
+    }
+  }
+
+  /** Le but est muré (un meuble posé dessus) : la case libre la plus proche qu'on peut atteindre. */
+  private nearestReach(from: Tile, to: Tile): Tile[] | null {
+    for (let r = 1; r <= 3; r++) {
+      const ring: Tile[] = [];
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !this.grid[to[1] + dy]?.[to[0] + dx]) continue;
+        ring.push([to[0] + dx, to[1] + dy]);
+      }
+      ring.sort((p, q) => Math.hypot(p[0] - to[0], p[1] - to[1]) - Math.hypot(q[0] - to[0], q[1] - to[1]));
+      for (const t of ring) { const path = findPath(this.grid, from, t); if (path) return path; }
+    }
+    return null;
+  }
+
+  /** Le robot tient dans cette case ? (ses pieds et un peu de large de chaque côté) */
+  private clear(x: number, y: number, a: Tile, b: Tile, m = 5) {
+    for (const ox of [-m, 0, m]) {
+      const tx = Math.floor((x + ox) / T), ty = Math.floor((y - 2) / T);
+      if (this.grid[ty]?.[tx]) continue;
+      if ((tx === a[0] && ty === a[1]) || (tx === b[0] && ty === b[1])) continue;
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Le chemin en cases fait des escaliers : on tend la corde. De chaque point on va au plus loin qu'on voit
+   * en ligne droite sans toucher un meuble, ce qui donne des diagonales et des trajets plus naturels.
+   */
+  private smooth(a: Actor, pts: Pt[], goal: Tile): Pt[] {
+    if (pts.length < 2) return pts;
+    const start = a.tile;
+    const all: Pt[] = [{ x: a.x, y: a.y }, ...pts];
+    const sees = (p: Pt, q: Pt) => {
+      const n = Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / 2);
+      for (let i = 1; i < n; i++) if (!this.clear(p.x + ((q.x - p.x) * i) / n, p.y + ((q.y - p.y) * i) / n, start, goal, 7)) return false;
+      return true;
+    };
+    const out: Pt[] = [];
+    let i = 0;
+    while (i < all.length - 1) {
+      let j = all.length - 1;
+      while (j > i + 1 && !sees(all[i], all[j])) j--;
+      out.push(all[j]);
+      i = j;
+    }
+    return out;
+  }
+
+  /** On s'écarte de ceux qu'on croise au lieu de passer à travers : un pas de côté, sans quitter les cases libres. */
+  private sidestep(a: Actor, dt: number) {
+    const to = a.path[0];
+    if (!to) return;
+    const mx = to.x - a.x, my = to.y - a.y;
+    const m = Math.hypot(mx, my);
+    if (m < 0.5) return;
+    // les autres robots, et le chat qu'on ne veut surtout pas piétiner
+    const others: { x: number; y: number; id: string }[] = [];
+    for (const b of this.actors.values()) if (b !== a && !b.gone && !b.seated && b.alpha >= 0.5 && b.doing !== 'sofa' && b.doing !== 'sleep') others.push(b);
+    others.push({ x: this.cat.x, y: this.cat.y, id: '~cat' });
+    for (const b of others) {
+      const dx = a.x - b.x, dy = a.y - b.y;
+      const d = Math.hypot(dx, dy * 1.5);
+      if (d >= 10 || d < 0.01) continue;
+      // à droite ou à gauche de sa route, du côté où l'autre n'est pas ; au pile face à face, chacun sa droite
+      const px = -my / m, py = mx / m;
+      const side = Math.sign(dx * px + dy * py) || (a.id < b.id ? 1 : -1);
+      const push = ((10 - d) / 10) * 42 * dt;
+      const nx = a.x + px * side * push + (dx / d) * push * 0.3, ny = a.y + py * side * push + (dy / d) * push * 0.3;
+      if (this.clear(nx, ny, NONE, NONE)) { a.x = nx; a.y = ny; }
     }
   }
 
@@ -371,8 +514,10 @@ export class World {
       case 'walk':
       case 'slide':
       case 'sit': {
-        const speed = (task.t === 'slide' && task.speed) || (task.t === 'sit' ? 30 : WALK_SPEED);
+        const speed = (task.t === 'slide' && task.speed) || (task.t === 'sit' ? 30 : WALK_SPEED * a.pace);
         let budget = speed * dt;
+        const px = a.x, py = a.y;
+        const wasClear = task.t === 'walk' && this.clear(px, py, NONE, NONE);
         while (budget > 0 && a.path.length) {
           const p = a.path[0];
           const dx = p.x - a.x, dy = p.y - a.y;
@@ -382,6 +527,20 @@ export class World {
           else { a.x += (dx / d) * budget; a.y += (dy / d) * budget; budget = 0; }
         }
         a.moving = a.path.length > 0 && task.t !== 'sit';
+        if (a.moving && task.t === 'walk' && this.time >= a.ghostUntil) {
+          this.sidestep(a, dt);
+          // un pas de côté a mis la route de travers : on revient d'où on venait et on recalcule le chemin depuis là
+          if (wasClear && !this.clear(a.x, a.y, NONE, NONE)) {
+            a.x = px; a.y = py;
+            a.ghostUntil = this.time + 1.2;
+            const tiles = findPath(this.grid, a.tile, task.tile) ?? this.nearestReach(a.tile, task.tile);
+            if (tiles) {
+              const keep = task.then ? a.path[a.path.length - 1] : null;
+              a.path = this.smooth(a, tiles.map(tileFeet), task.tile);
+              if (keep) a.path.push(keep);
+            }
+          }
+        }
         if (a.path.length) return false;
         a.moving = false;
         if (task.t === 'sit') { a.seated = true; a.seat = task.seat; a.dir = 'down'; }
@@ -476,6 +635,7 @@ export class World {
           res.tasks = [];
           res.cur = null;
           res.smokeUntil = 0;
+          this.stopDoing(res);
           res.at = null;
           res.act = null;
           res.actAt = -99;
@@ -689,6 +849,9 @@ export class World {
         this.fx.smoke(e.x, e.y - 1);
       }
     }
+    for (const a of this.actors.values()) {
+      if (a.doing === 'sleep' && this.time > a.nextPuff) { a.nextPuff = this.time + 1.7; this.fx.floatIcon(a.x + 4, a.y - 24, 'zzz'); }
+    }
     for (const a of [...this.actors.values()]) {
       if (a.res && !a.onMission) this.wander(a);
       if (!a.cur && a.tasks.length) { a.cur = a.tasks.shift()!; this.startTask(a, a.cur); }
@@ -698,7 +861,7 @@ export class World {
         if (this.runTask(a, task, dt) && a.cur === task) a.cur = null;
       }
       this.animate(a, dt);
-      if (a.moving || (a.cur && !(a.res && !a.onMission && a.cur.t === 'wait')) || a.seated || a.cheerUntil > this.time) moving = true;
+      if (a.moving || (a.cur && !(a.res && !a.onMission && a.cur.t === 'wait')) || a.seated || a.cheerUntil > this.time || a.doing === 'notes' || a.doing === 'phone') moving = true;
     }
     this.calm = !this.missionActive && this.time >= this.discoUntil && !this.musicOn && this.time >= this.printUntil && this.time >= this.boardUntil;
     return moving;
@@ -744,6 +907,7 @@ export class World {
       // l'équipe de la visite remplace l'équipe qui se balade
       for (const a of this.residents) if (!a.onMission) this.actors.delete(a.id);
       this.residents = new Set([...this.residents].filter((a) => a.onMission));
+      this.slotUsed.clear();
       for (const [id, role, name] of demo) {
         if (this.actors.has(id)) continue;
         const seat = this.assignSeat(role);
@@ -803,7 +967,8 @@ export class World {
     const t = this.time;
     const recent = t - a.actAt < 9;
     let pose: Pose;
-    if (a.cur?.t === 'wait' && a.cur.pose) pose = a.cur.pose;
+    if (a.doing === 'sofa' || a.doing === 'sleep') { pose = 'sit'; a.dir = 'down'; }
+    else if (a.cur?.t === 'wait' && a.cur.pose) pose = a.cur.pose;
     else if (a.moving) pose = a.carrying ? 'carry' : 'walk';
     else if (a.asks > 0) pose = 'raise';
     else if (a.cheerUntil > t) pose = 'cheer';
@@ -844,7 +1009,10 @@ export class World {
     else if (pose === 'write') eyes = 'up';
     else if (t - a.thinkAt < 2.5 && !a.moving) eyes = 'up';
     else if (a.lookUntil > t && !a.moving) eyes = a.look;
+    if (a.doing === 'notes' || a.doing === 'phone') eyes = 'down';
+    else if (a.doing === 'sofa' && this.cat.onSofa && a.happyUntil <= t && !a.moving) eyes = a.slot === 0 ? 'right' : 'left'; // il regarde le chat dormir
     if (a.blinkUntil > t && eyes !== 'happy') eyes = 'blink';
+    if (a.doing === 'sleep') eyes = 'blink';
     a.eyes = eyes;
   }
 }

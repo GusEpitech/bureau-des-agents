@@ -28,6 +28,8 @@ export interface MissionInfo {
   /** mode projet : la branche git créée pour la mission, et celle d'où elle part */
   branch?: string;
   baseBranch?: string;
+  /** mode rapide : pas de plan, pas d'équipe (choisi au lancement de la mission) */
+  quick?: boolean;
   createdAt: number;
   endedAt?: number;
   /** temps de travail cumulé (toutes les reprises comprises) */
@@ -126,6 +128,8 @@ export interface Settings {
   recent: string[];
   /** mode projet : le modèle du nom des branches, avec {titre}, {ticket}, {date}, {heure}, {projet} */
   branchPattern: string;
+  /** mode projet, version rapide : Max fait la petite tâche lui-même, sans plan à valider ni équipe */
+  quick: boolean;
 }
 
 /** Ton quota Claude : la part déjà utilisée (0 à 1) sur 5 heures et sur 7 jours, quand il se recharge (secondes), et quand on l'a mesuré. */

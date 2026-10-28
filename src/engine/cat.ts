@@ -128,6 +128,9 @@ export class Cat {
     this.heartUntil = time + 1.2;
   }
 
+  /** Il dort sur le canapé (les robots s'assoient alors à côté, sans le déranger). */
+  get onSofa() { return this.pose === 'sleep' && !this.path.length && Math.abs(this.x - SOFA.x) < 2; }
+
   get frame() { return Math.floor(this.t * 6) % 2; }
 
   /** Sur le canapé, il passe devant (sinon le dossier le cacherait). */

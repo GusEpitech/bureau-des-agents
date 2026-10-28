@@ -92,7 +92,7 @@ export class Renderer {
       items.push({ y: p.sortY, k: 0, draw: () => { g.drawImage(p.c, p.x + shake, p.y); this.furnitureLive(g, p, world, atDesk.get(p.f.id) ?? null, t); } });
     }
     for (const a of world.actors.values()) {
-      items.push({ y: a.seated && a.seat ? a.seat.y : a.y, k: 1, draw: () => this.actor(g, a, world) });
+      items.push({ y: a.seated && a.seat ? a.seat.y : a.doing === 'sofa' || a.doing === 'sleep' ? 14 * T + 16 : a.y, k: 1, draw: () => this.actor(g, a, world) });
     }
     items.push({ y: world.cat.sortY, k: 2, draw: () => world.cat.draw(g) });
     items.sort((a, b) => a.y - b.y || a.k - b.k);
@@ -111,13 +111,38 @@ export class Renderer {
     // sur la musique, ceux qui ne marchent pas hochent la tête en rythme
     const y = Math.round(a.y) - (world.musicOn && world.time < world.bobUntil && !a.moving ? 1 : 0);
     g.globalAlpha = a.alpha;
-    if (!seated) {
+    const onSofa = a.doing === 'sofa' || a.doing === 'sleep';
+    if (!seated && !onSofa) {
       g.fillStyle = 'rgba(8,6,16,0.32)';
       g.fillRect(x - 5, y - 1, 10, 2);
       g.fillRect(x - 4, y - 2, 8, 1);
     }
     const sprite = robotSprite(a.role, a.pose, seated ? 'down' : a.dir, a.frame, a.eyes);
     g.drawImage(sprite, x - ANCHOR_X, y - ANCHOR_Y);
+    if (a.doing === 'notes' && !a.moving) {
+      // le carnet tenu devant lui, le stylo qui court sur la page
+      g.fillStyle = P.orangeDark;
+      g.fillRect(x - 5, y - 11, 9, 7);
+      g.fillStyle = '#fffaf0';
+      g.fillRect(x - 4, y - 10, 7, 5);
+      g.fillStyle = '#9aa3b8';
+      const lines = 1 + (Math.floor(world.time * 1.5) % 3);
+      for (let i = 0; i < lines; i++) g.fillRect(x - 3, y - 9 + i * 2, 5 - (i === lines - 1 ? 1 + (Math.floor(world.time * 6) % 3) : 0), 1);
+      g.fillStyle = '#2b2836';
+      g.fillRect(x + 1 + (Math.floor(world.time * 7) % 3), y - 10, 1, 3);
+      g.fillStyle = P.orange;
+      g.fillRect(x + 1 + (Math.floor(world.time * 7) % 3), y - 7, 1, 1);
+    } else if (a.doing === 'phone' && !a.moving) {
+      // le téléphone devant le visage : l'écran éclaire un peu la tête
+      g.fillStyle = 'rgba(143,216,255,0.22)';
+      g.fillRect(x - 4, y - 17, 8, 4);
+      g.fillStyle = '#15121d';
+      g.fillRect(x + 2, y - 15, 4, 7);
+      g.fillStyle = Math.floor(world.time * 2.2) % 2 ? '#8fd8ff' : '#ffd166';
+      g.fillRect(x + 3, y - 14, 2, 5);
+      g.fillStyle = '#ffffff';
+      g.fillRect(x + 3, y - 14 + (Math.floor(world.time * 5) % 4), 2, 1);
+    }
     if (a.smokeUntil > world.time && !a.moving) {
       // la cigarette : un contour sombre (sinon elle disparaît sur les robots clairs), le bout qui rougeoit
       const tip = smokeTip(a, world.time);

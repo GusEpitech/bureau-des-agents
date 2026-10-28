@@ -190,7 +190,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   connection: 'connecting',
   claude: null,
   dir: '',
-  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN },
+  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false },
   quota: null,
   missions: [],
   mission: null,

@@ -80,7 +80,7 @@ export function TopBar() {
           <b>Le Bureau des agents</b>
           <span>{connection === 'demo' ? 'Démo · VibesMoney' : 'par VibesMoney'}</span>
         </div>
-        {projectName && <span className="project-badge" title="Mode projet : l’équipe travaille dans ce projet">🛠️ {projectName}</span>}
+        {projectName && <span className="project-badge" title="Mode projet : l’équipe travaille dans ce projet">🛠️ {projectName}{mission?.quick ? ' ⚡' : ''}</span>}
       </div>
 
       <div className="mission-head">

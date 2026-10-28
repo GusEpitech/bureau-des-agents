@@ -44,7 +44,7 @@ Le dossier caché « .bureau » garde l'état du bureau et l'enregistrement de c
 Tu peux le supprimer pour tout recommencer.
 `;
 
-const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN };
+const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false };
 const CHEF_MODELS = ['', 'sonnet', 'opus', 'haiku', 'fable'];
 const TEAM_MODELS = ['sonnet', 'haiku', 'opus', 'fable', 'inherit'];
 const MODEL_ROLES: Role[] = ['recherche', 'code', 'design', 'redaction', 'analyse'];
@@ -193,6 +193,7 @@ export class Bureau {
       // le dernier dossier choisi passe en tête de la liste (le navigateur ne peut pas la modifier)
       recent: workdir ? [workdir, ...cur.recent.filter((d) => d !== workdir)].slice(0, MAX_RECENT) : cur.recent,
       branchPattern: typeof p.branchPattern === 'string' ? p.branchPattern.trim().slice(0, 100) || DEFAULT_BRANCH_PATTERN : cur.branchPattern,
+      quick: typeof p.quick === 'boolean' ? p.quick : cur.quick,
     };
     this.save();
     this.broadcast({ t: 'settings', settings: this.state.settings });
@@ -305,7 +306,7 @@ export class Bureau {
 
     const mission: MissionInfo = {
       id: 'm' + Date.now().toString(36), title, prompt: text, folder, createdAt: Date.now(), workMs: 0,
-      status: 'working', stats: emptyStats(), files: [], project, branch: git?.branch, baseBranch: git?.base,
+      status: 'working', stats: emptyStats(), files: [], project, branch: git?.branch, baseBranch: git?.base, quick: project && this.settings.quick ? true : undefined,
     };
     this.state.missions.push(mission);
     this.state.currentId = mission.id;
@@ -419,7 +420,7 @@ export class Bureau {
     let l = cur.live;
     if (!l || !l.proc.alive) l = this.spawn(cur);
     // mode projet : chaque nouvelle demande repasse par un plan à valider (une précision en plein travail, non)
-    else if (this.ownFolder(cur.mission) && cur.mission.status !== 'working') l.proc.setPermissionMode('plan');
+    else if (this.ownFolder(cur.mission) && !cur.mission.quick && cur.mission.status !== 'working') l.proc.setPermissionMode('plan');
     if (cur.idleTimer) { clearTimeout(cur.idleTimer); cur.idleTimer = null; }
     l.lastText = clean;
     cur.stopAsked = false;
@@ -451,11 +452,12 @@ export class Bureau {
     const proc: ClaudeProcess = new ClaudeProcess(
       {
         // mode projet : Max commence en mode plan (il explore, puis te soumet son plan avant de coder)
-        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: this.ownFolder(cur.mission) ? 'plan' : this.workMode(),
+        bin: this.claude.path, cwd: cur.mission.folder, permissionMode: this.ownFolder(cur.mission) && !cur.mission.quick ? 'plan' : this.workMode(),
         model: s.chefModel || undefined, resume, tools: SESSION_TOOLS, allowedTools: ALWAYS_ALLOWED,
         agents: agentsJson(s, this.ownFolder(cur.mission)),
-        appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
+        appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch, !!cur.mission.quick), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
         restricted: !this.ownFolder(cur.mission),
+        solo: !!cur.mission.quick,
       },
       (m) => {
         if (cur.live?.proc !== proc) return; // un ancien processus qui parle encore
