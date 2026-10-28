@@ -10,7 +10,8 @@ import { g2d, makeCanvas, P, rgba, rng, type G } from './pixels.ts';
 import { ANCHOR_X, ANCHOR_Y, robotSprite } from './robots.ts';
 import { drawRoom, neon, signs, type TimeOfDay } from './room.ts';
 import { isProjectMode, ROLES } from '../../shared/activity.ts';
-import { smokeDrag, smokeTip, type Actor, type World } from './world.ts';
+import { smokeDrag, smokeTip, type Actor } from './actor.ts';
+import type { World } from './world.ts';
 
 interface Placed { f: Furn; c: HTMLCanvasElement; x: number; y: number; sortY: number }
 

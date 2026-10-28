@@ -4,146 +4,32 @@
 //   - « .bureau/ » (caché) : l'état du bureau et l'enregistrement de chaque mission (pour la rejouer).
 // Une mission = une séance Claude Code lancée dans le dossier de la mission. On peut lui reparler
 // une fois finie (retouches) : la même séance reprend.
-import { execFile, execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
-import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { appendFileSync, existsSync, renameSync, statSync, watch, writeFileSync } from 'node:fs';
+import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats, mcpPrefix } from '../shared/activity.ts';
-import { branchFromPlan, branchName, DEFAULT_BRANCH_PATTERN, tidyBranch } from '../shared/branch.ts';
-import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, SearchHit, ServerMsg, Stats, WeekDay, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
+import { branchFromPlan, branchName, tidyBranch } from '../shared/branch.ts';
+import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, SearchHit, ServerMsg, Stats, WeekDay, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
+import { createBranch, currentBranch, followedBranch, renamedBranch } from './branches.ts';
 import { Library } from './library.ts';
 import { mcpList } from './mcp.ts';
+import { readLog, teamHistory } from './records.ts';
+import { README, readRules, RULES_FILE, RULES_TEMPLATE } from './rules.ts';
+import { DEFAULT_SETTINGS, MAX_RECENT, mergeSettings } from './settings.ts';
+import type { Current, Live, State } from './types.ts';
+import { addUsage, cleanName, pad, titleOf } from './util.ts';
+import { keepVersion, listVersions, MAX_VERSION_SIZE, versionDirName } from './versions.ts';
 import { ClaudeProcess, freshQuota, measureQuota, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
 import * as gitOps from './git.ts';
 import { agentsJson, ALWAYS_ALLOWED, chefPrompt, SESSION_TOOLS } from './team.ts';
 
-const RULES_FILE = 'Règlement du bureau.md';
-
-const RULES_TEMPLATE = `# Le règlement du bureau
-
-Max, le chef de projet, lit ce fichier avant chaque mission. Écris-y ce que l'équipe doit savoir
-sur toi, avec tes mots, comme si tu briefais de nouveaux collègues.
-
-## Qui je suis
-<!-- Par exemple : « Je m'appelle Alex, je suis coach sportif à Lyon. Je vends des programmes en ligne à des femmes de 30 à 45 ans. » -->
-
-## Comment travailler pour moi
-- Réponds-moi en français, simplement.
-- Va droit au but : je veux des livrables prêts à servir.
-- Range tout dans le dossier de la mission, avec des noms de fichiers clairs.
-`;
-
-const README = `# Le Bureau des agents
-
-Ici travaille ton équipe d'agents IA (des agents Claude Code).
-
-- « Règlement du bureau.md » : ce que l'équipe doit savoir sur toi. Max, le chef, le lit avant chaque mission.
-- « Missions » : un dossier par mission. Tout ce que l'équipe produit (rapports, pages web, textes) y est rangé.
-
-Le dossier caché « .bureau » garde l'état du bureau et l'enregistrement de chaque mission, pour la rejouer.
-Tu peux le supprimer pour tout recommencer.
-`;
-
-const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false, skills: false, mcpOff: {}, chefEffort: '', roleEffort: {} };
-const CHEF_MODELS = ['', 'sonnet', 'opus', 'haiku', 'fable'];
-const TEAM_MODELS = ['sonnet', 'haiku', 'opus', 'fable', 'inherit'];
-const MODEL_ROLES: Role[] = ['recherche', 'code', 'design', 'redaction', 'analyse'];
-
-/** Les modèles par métier : seulement des métiers connus et des modèles connus (le reste est écarté). */
-function cleanRoleModels(v: Partial<Record<Role, unknown>>): Partial<Record<Role, string>> {
-  const out: Partial<Record<Role, string>> = {};
-  for (const r of MODEL_ROLES) {
-    const m = v[r];
-    if (typeof m === 'string' && TEAM_MODELS.includes(m)) out[r] = m;
-  }
-  return out;
-}
-const EFFORT_LEVELS = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
-function cleanRoleEffort(v: Partial<Record<Role, unknown>>): Partial<Record<Role, string>> {
-  const out: Partial<Record<Role, string>> = {};
-  for (const r of MODEL_ROLES) { const e = v[r]; if (typeof e === 'string' && e && EFFORT_LEVELS.includes(e)) out[r] = e; }
-  return out;
-}
-/** Les connecteurs coupés par projet : des listes de clés « claude.ai:Canva », sans rien d'autre. */
-function cleanMcpOff(v: Record<string, unknown>): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const [dir, list] of Object.entries(v).slice(0, 100)) {
-    if (!Array.isArray(list)) continue;
-    const keys = list.filter((k): k is string => typeof k === 'string' && /^(claude\.ai|local):.{1,80}$/.test(k)).slice(0, 60);
-    if (keys.length) out[dir.slice(0, 500)] = [...new Set(keys)];
-  }
-  return out;
-}
 const IDLE_STOP_MS = 15 * 60 * 1000;
 const MAX_LOG = 8000;
 const MAX_MISSIONS = 300;
-/** au-delà, un fichier n'est pas gardé en version (vidéos, gros exports) */
-const MAX_VERSION_SIZE = 5_000_000;
-const MAX_VERSIONS = 30;
-const MAX_RECENT = 6;
 /** dans un dossier de travail (un projet), ces dossiers bougent tout seuls : on ne les suit pas */
 const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'target', '__pycache__', 'venv', 'vendor']);
-
-/** Un nom de dossier sûr pour ranger les versions d'un fichier. */
-const versionDirName = (rel: string) => rel.replace(/[\\/]+/g, '__').replace(/[^\w.\-À-ÿ ]+/g, '_').slice(0, 160);
-
-interface State { missions: MissionInfo[]; settings: Settings; /** le dernier quota mesuré (gardé d'un lancement à l'autre) */ quota?: Quota | null; /** la mission ouverte (rouverte au redémarrage du bureau) */ currentId?: string }
-
-interface Live {
-  proc: ClaudeProcess;
-  norm: Normalizer;
-  stopping: boolean;
-  /** le dernier message envoyé (pour le renvoyer si la reprise de séance échoue) */
-  lastText: string;
-  resumed: boolean;
-}
-
-interface Current {
-  mission: MissionInfo;
-  log: Logged[];
-  live: Live | null;
-  /** les prénoms déjà donnés dans cette mission */
-  names: Set<string>;
-  watcher: FSWatcher | null;
-  fileTimers: Map<string, NodeJS.Timeout>;
-  idleTimer: NodeJS.Timeout | null;
-  /** depuis quand l'équipe travaille (null = au repos) */
-  busySince: number | null;
-  stopAsked: boolean;
-  lastChefText: string;
-  /** ce que le tour en cours a consommé (cumulé si Max reprend la main après l'équipe) */
-  usage?: TurnUsage;
-}
-
-/** Additionne l'usage de deux tours (un tour peut se faire en plusieurs résultats). */
-function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage {
-  if (!a) return b;
-  const sum = (x?: number, y?: number) => (x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0));
-  return {
-    input: a.input + b.input, output: a.output + b.output, cacheRead: sum(a.cacheRead, b.cacheRead), cacheWrite: sum(a.cacheWrite, b.cacheWrite),
-    costUsd: sum(a.costUsd, b.costUsd), turns: sum(a.turns, b.turns),
-  };
-}
-
-const pad = (n: number) => String(n).padStart(2, '0');
-
-/** Un titre court, tiré de la demande : « Analyse mes 5 concurrents et fais-moi… » → « Analyse mes 5 concurrents et fais-moi » */
-function titleOf(prompt: string) {
-  const first = prompt.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s/)[0] ?? '';
-  let t = first.replace(/[.!?:;,]+$/, '');
-  if (t.length > 46) t = t.slice(0, 46).replace(/\s+\S*$/, '') + '…';
-  return t ? t[0].toUpperCase() + t.slice(1) : 'Mission';
-}
-
-const cleanName = (s: string) => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^\.+/, '');
-
-/** Le contenu du règlement, sans les commentaires d'exemple. */
-function readRules(dir: string) {
-  try {
-    return readFileSync(path.join(dir, RULES_FILE), 'utf8').replace(/<!--[\s\S]*?-->/g, '').slice(0, 20000);
-  } catch { return ''; }
-}
 
 export class Bureau {
   readonly dir: string;
@@ -203,21 +89,7 @@ export class Bureau {
   setSettings(p: Partial<Settings>) {
     const cur = this.state.settings;
     const workdir = typeof p.workdir === 'string' ? this.checkWorkdir(p.workdir) : cur.workdir;
-    this.state.settings = {
-      chefModel: typeof p.chefModel === 'string' && CHEF_MODELS.includes(p.chefModel) ? p.chefModel : cur.chefModel,
-      teamModel: typeof p.teamModel === 'string' && TEAM_MODELS.includes(p.teamModel) ? p.teamModel : cur.teamModel,
-      permission: p.permission === 'ask' || p.permission === 'auto' ? p.permission : cur.permission,
-      roleModels: p.roleModels && typeof p.roleModels === 'object' ? cleanRoleModels(p.roleModels) : cur.roleModels,
-      workdir,
-      // le dernier dossier choisi passe en tête de la liste (le navigateur ne peut pas la modifier)
-      recent: workdir ? [workdir, ...cur.recent.filter((d) => d !== workdir)].slice(0, MAX_RECENT) : cur.recent,
-      branchPattern: typeof p.branchPattern === 'string' ? p.branchPattern.trim().slice(0, 100) || DEFAULT_BRANCH_PATTERN : cur.branchPattern,
-      quick: typeof p.quick === 'boolean' ? p.quick : cur.quick,
-      skills: typeof p.skills === 'boolean' ? p.skills : cur.skills,
-      mcpOff: p.mcpOff && typeof p.mcpOff === 'object' ? cleanMcpOff(p.mcpOff) : cur.mcpOff,
-      chefEffort: typeof p.chefEffort === 'string' && EFFORT_LEVELS.includes(p.chefEffort) ? p.chefEffort : cur.chefEffort,
-      roleEffort: p.roleEffort && typeof p.roleEffort === 'object' ? cleanRoleEffort(p.roleEffort) : cur.roleEffort,
-    };
+    this.state.settings = mergeSettings(cur, p, workdir);
     this.save();
     this.broadcast({ t: 'settings', settings: this.state.settings });
   }
@@ -325,7 +197,7 @@ export class Bureau {
       await mkdir(folder, { recursive: true });
     }
     const project = this.settings.workdir ? path.basename(folder) : undefined;
-    const git = project ? this.gitBranch(folder, branchName(this.settings.branchPattern, { title, prompt: text, project, now })) : null;
+    const git = project ? createBranch(folder, branchName(this.settings.branchPattern, { title, prompt: text, project, now })) : null;
 
     const mission: MissionInfo = {
       id: 'm' + Date.now().toString(36), title, prompt: text, folder, createdAt: Date.now(), workMs: 0,
@@ -350,30 +222,6 @@ export class Bureau {
    * Refuse si le dépôt a des changements pas commités (ils se mélangeraient à ceux de l'équipe).
    * Un dossier qui n'est pas un dépôt git : pas de branche.
    */
-  private gitBranch(folder: string, wanted: string): { branch: string; base: string } | null {
-    const git = (...args: string[]) => execFileSync('git', ['-C', folder, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-    try {
-      if (git('rev-parse', '--is-inside-work-tree') !== 'true') return null;
-    } catch { return null; } // pas un dépôt git (ou git absent)
-    if (git('status', '--porcelain')) {
-      throw new Error('Ton projet a des changements pas encore commités. Commite-les (ou mets-les de côté avec « git stash »), puis relance : l’équipe travaillera sur sa propre branche.');
-    }
-    let base = '';
-    try { base = git('symbolic-ref', '--short', 'HEAD'); } catch { base = git('rev-parse', '--short', 'HEAD'); }
-    // le nom tiré du modèle des réglages ; git a le dernier mot sur ce qui est un nom valide
-    try { git('check-ref-format', '--branch', wanted); } catch {
-      throw new Error(`« ${wanted} » n’est pas un nom de branche valide pour git : change le modèle dans les réglages.`);
-    }
-    let branch = wanted;
-    for (let n = 2; this.gitHas(git, branch); n++) branch = `${wanted}-${n}`;
-    try { git('switch', '-c', branch); } catch {
-      try { git('checkout', '-b', branch); } catch (e) {
-        throw new Error(`Je n’arrive pas à créer la branche ${branch} : ${e instanceof Error ? e.message.split('\n').pop() : e}`);
-      }
-    }
-    return { branch, base };
-  }
-
   /**
    * Le plan validé commence par « Branche : ticket | titre » : Max a lu le ticket, le bureau renomme alors la branche
    * (créée au départ d'après la seule demande) avec le modèle des réglages. Seulement si elle n'a pas bougé.
@@ -387,17 +235,11 @@ export class Bureau {
       wanted = branchFromPlan(plan, this.settings.branchPattern, { prompt: m.prompt, project: m.project, createdAt: m.createdAt });
     }
     if (!wanted || wanted === m.branch) return;
-    const git = (...args: string[]) => execFileSync('git', ['-C', m.folder, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-    try {
-      if (this.currentBranch(m.folder) !== m.branch) return;
-      let branch = wanted;
-      for (let n = 2; this.gitHas(git, branch); n++) branch = `${wanted}-${n}`;
-      git('check-ref-format', '--branch', branch);
-      git('branch', '-m', m.branch, branch);
-      m.branch = branch;
-      this.save();
-      this.broadcast({ t: 'mission', mission: m });
-    } catch { /* on garde le nom du départ : le travail continue quoi qu'il arrive */ }
+    const branch = renamedBranch(m.folder, m.branch, wanted);
+    if (!branch) return;
+    m.branch = branch;
+    this.save();
+    this.broadcast({ t: 'mission', mission: m });
   }
 
   /**
@@ -406,24 +248,11 @@ export class Bureau {
    */
   private followBranch(m: MissionInfo) {
     if (!m.project || !m.branch) return;
-    const git = (...args: string[]) => execFileSync('git', ['-C', m.folder, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-    try {
-      if (this.gitHas(git, m.branch)) return;
-      const now = this.currentBranch(m.folder);
-      if (!now || now === m.baseBranch) return;
-      m.branch = now;
-      this.save();
-      this.broadcast({ t: 'mission', mission: m });
-    } catch { /* tant pis */ }
-  }
-
-  private gitHas(git: (...a: string[]) => string, branch: string) {
-    try { git('rev-parse', '--verify', '--quiet', `refs/heads/${branch}`); return true; } catch { return false; }
-  }
-
-  /** La branche git actuelle du dossier (null si ce n'est pas un dépôt). */
-  private currentBranch(folder: string): string | null {
-    try { return execFileSync('git', ['-C', folder, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; }
+    const now = followedBranch(m);
+    if (!now) return;
+    m.branch = now;
+    this.save();
+    this.broadcast({ t: 'mission', mission: m });
   }
 
   /** Parler à Max : la mission, puis les retouches. S'il s'était endormi, il reprend sa séance. */
@@ -437,7 +266,7 @@ export class Bureau {
     if (cur.mission.status !== 'working') this.followBranch(cur.mission);
     const branch = cur.mission.branch;
     if (branch && cur.mission.status !== 'working') {
-      const now = this.currentBranch(cur.mission.folder);
+      const now = currentBranch(cur.mission.folder);
       if (now !== branch) throw new Error(`Ton projet n’est plus sur la branche de la mission (${branch}). Reviens dessus pour une retouche, ou lance une nouvelle mission.`);
     }
     let l = cur.live;
@@ -656,34 +485,13 @@ export class Bureau {
     this.record(cur, { k: 'file', file, isNew: i < 0 });
     this.save();
     // en mode projet, git garde déjà l'historique : pas de copies en double
-    if (st.size <= MAX_VERSION_SIZE && !this.ownFolder(cur.mission)) void this.keepVersion(cur.mission.id, rel, abs, st.mtimeMs, file.by);
-  }
-
-  /** Garde une copie de chaque version d'un rendu (l'historique des versions). */
-  private async keepVersion(missionId: string, rel: string, abs: string, at: number, by: string) {
-    try {
-      const dir = path.join(this.verDir, missionId, versionDirName(rel));
-      await mkdir(dir, { recursive: true });
-      const safeBy = by.replace(/[^\w-]/g, '').slice(0, 64) || 'chef';
-      await copyFile(abs, path.join(dir, `${Math.round(at)}__${safeBy}${path.extname(rel)}`));
-      const all = (await readdir(dir)).sort();
-      for (const old of all.slice(0, Math.max(0, all.length - MAX_VERSIONS))) await unlink(path.join(dir, old)).catch(() => {});
-    } catch { /* pas de version cette fois : le fichier reste là */ }
+    if (st.size <= MAX_VERSION_SIZE && !this.ownFolder(cur.mission)) void keepVersion(this.verDir, cur.mission.id, rel, abs, st.mtimeMs, file.by);
   }
 
   /** Les versions d'un rendu, de la plus récente à la plus ancienne. */
   async versions(missionId: string, file: string): Promise<VersionInfo[]> {
     this.inside(missionId, file);
-    const dir = path.join(this.verDir, missionId, versionDirName(file));
-    const names = await readdir(dir).catch(() => [] as string[]);
-    const out: VersionInfo[] = [];
-    for (const n of names) {
-      const m = n.match(/^(\d+)__([\w-]*)/);
-      if (!m) continue;
-      const st = await stat(path.join(dir, n)).catch(() => null);
-      if (st) out.push({ id: n, at: Number(m[1]), size: st.size, by: m[2] || 'chef' });
-    }
-    return out.sort((a, b) => b.at - a.at);
+    return listVersions(this.verDir, missionId, file);
   }
 
   /** Le chemin d'un fichier de la mission pour l'aperçu des sites (null s'il sort du dossier). */
@@ -711,32 +519,8 @@ export class Bureau {
   }
 
   /** Tous les agents passés au bureau, mission par mission (les plus récentes d'abord). */
-  async teamHistory(): Promise<TeamEntry[]> {
-    const out: TeamEntry[] = [];
-    for (const m of this.missions().slice(0, 40)) {
-      const raw = await readFile(path.join(this.recDir, `${m.id}.jsonl`), 'utf8').catch(() => '');
-      const byId = new Map<string, TeamEntry>();
-      for (const line of raw.split('\n')) {
-        if (!line.trim()) continue;
-        let l: Logged;
-        try { l = JSON.parse(line) as Logged; } catch { continue; }
-        const ev = l.ev;
-        if (ev.k === 'hire') {
-          byId.set(ev.id, {
-            missionId: m.id, missionTitle: m.title, at: l.at, id: ev.id, name: ev.name, role: ev.role as Role, task: ev.task,
-            status: 'working', tools: 0, tokens: 0, ms: 0, report: '',
-          });
-        } else if (ev.k === 'report') {
-          const e = byId.get(ev.who);
-          if (e) e.report = ev.text.slice(0, 600);
-        } else if (ev.k === 'leave') {
-          const e = byId.get(ev.who);
-          if (e) Object.assign(e, { status: ev.ok ? 'done' : 'failed', tools: ev.tools, tokens: ev.tokens, ms: ev.ms || l.at - e.at });
-        }
-      }
-      out.push(...[...byId.values()].reverse());
-    }
-    return out;
+  teamHistory(): Promise<TeamEntry[]> {
+    return teamHistory(this.recDir, this.missions().slice(0, 40));
   }
 
   // ── Les commandes du bureau ──
@@ -859,12 +643,7 @@ export class Bureau {
 
   /** Remet une mission en place comme mission en cours, d'après son enregistrement. */
   private async load(m: MissionInfo): Promise<Current> {
-    const raw = await readFile(path.join(this.recDir, `${m.id}.jsonl`), 'utf8').catch(() => '');
-    const log: Logged[] = [];
-    for (const line of raw.split('\n')) {
-      if (!line.trim()) continue;
-      try { log.push(JSON.parse(line) as Logged); } catch { /* ligne coupée */ }
-    }
+    const log = await readLog(this.recDir, m.id);
     if (log.length > MAX_LOG) log.splice(0, log.length - MAX_LOG);
     const names = new Set<string>();
     let lastChefText = '';
@@ -958,12 +737,7 @@ export class Bureau {
   async replay(missionId: string): Promise<{ mission: MissionInfo; log: Logged[] }> {
     const m = this.mission(missionId);
     if (!m) throw new Error('Cette mission n’existe plus.');
-    const raw = await readFile(path.join(this.recDir, `${m.id}.jsonl`), 'utf8').catch(() => '');
-    const log: Logged[] = [];
-    for (const line of raw.split('\n')) {
-      if (!line.trim()) continue;
-      try { log.push(JSON.parse(line) as Logged); } catch { /* ligne coupée */ }
-    }
+    const log = await readLog(this.recDir, m.id);
     if (!log.length) throw new Error('Cette mission n’a pas été enregistrée.');
     return { mission: m, log };
   }

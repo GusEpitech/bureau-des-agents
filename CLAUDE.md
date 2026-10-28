@@ -15,8 +15,11 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 
 ## Comment c'est fait
 
-- **`server/`** : `index.ts` (HTTP, WebSocket, sécurité), `bureau.ts` (les missions, les fichiers, les versions, l'historique),
+- **`server/`** : `index.ts` (HTTP, WebSocket, sécurité), `bureau.ts` (les missions : démarrage, séance Claude Code, fichiers, reprise),
   `claude.ts` (lance `claude -p` en stream-json et traduit sa sortie en événements du bureau), `team.ts` (les métiers et les consignes).
+  Les morceaux de `bureau.ts` qui se suffisent à eux-mêmes vivent à côté : `settings.ts` (valeurs par défaut et nettoyage des réglages),
+  `rules.ts` (le règlement), `branches.ts` (les branches git), `versions.ts` (les copies de rendus), `records.ts` (lire un enregistrement,
+  l'historique de l'équipe), `types.ts` (`State`, `Live`, `Current`), `util.ts`, `library.ts` (l'index SQLite), `git.ts`, `mcp.ts`.
 - **Mode projet** : quand un dossier de travail est choisi (`settings.workdir`, sous la zone de saisie), la mission tourne dans ce
   dossier au lieu d'un dossier neuf de `Missions/`. Le serveur crée une branche git `bureau/…` (et refuse si le dépôt a des
   changements pas commités), Max et l'équipe reçoivent des consignes de développement (`projectPrompt`, `PROJECT_TEAM` dans
@@ -35,7 +38,8 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 - **`shared/protocol.ts`** : tous les messages entre le serveur et le navigateur, et les événements (`OfficeEvent`) : `start`, `hire`,
   `act`, `report`, `leave`, `file`, `ask`, `end`… **`shared/activity.ts`** : les métiers, leurs outils, les textes affichés.
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).
-- **`src/engine/`** : le monde (`world.ts` : robots, déplacements A*, chat, mode soirée), le dessin (`render.ts`, `room.ts`,
+- **`src/engine/`** : le monde (`world.ts` : les événements, le chat, le mode soirée ; `actor.ts` : un robot et ses gestes ; `nav.ts` : se déplacer
+  sans se coincer, A* dans `path.ts` ; `animate.ts` : pose et regard), le dessin (`render.ts`, `room.ts`,
   `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 368), la caméra et son réalisateur
   (`camera.ts`), les clics (`hits.ts`).
 - **`src/ui/`** : l'interface React. `Office.tsx` (le canevas, les bulles, la boucle d'animation), `Dialog.tsx` (Max et la boîte de
