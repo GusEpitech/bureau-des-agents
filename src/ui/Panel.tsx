@@ -286,7 +286,10 @@ function FilesSection() {
         </p>
       )}
       {files ? <FileList /> : <p className="small muted">{mission?.project ? 'Les fichiers que l’équipe modifie arriveront ici.' : 'Les fichiers de l’équipe arriveront ici (et dans le dossier de la mission).'}</p>}
-      {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir dans l’éditeur' : 'Ouvrir le dossier de la mission'}</button>}
+      <div className="row">
+        {mission?.project && mission.branch && <button className="btn small" onClick={() => { sfx('click'); window.dispatchEvent(new CustomEvent('bureau:tab', { detail: 2 })); }}>🔀 Voir le diff</button>}
+        {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir dans l’éditeur' : 'Ouvrir le dossier de la mission'}</button>}
+      </div>
     </section>
   );
 }

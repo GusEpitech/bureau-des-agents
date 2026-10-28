@@ -57,7 +57,8 @@ const PLAN_STATE: Record<NonNullable<ChatMsg['plan']>, string> = {
 
 /** Le plan de Max (mode projet) : tu le valides avant qu'il code, ou tu demandes des changements. */
 function PlanMessage({ m }: { m: ChatMsg }) {
-  const html = useMemo(() => mdToHtml(tidy(m.text)), [m.text]);
+  // la ligne « Branche : … » est pour le bureau : elle devient le champ modifiable sous le plan
+  const html = useMemo(() => mdToHtml(tidy(m.text.replace(/^\W*branche\s*:.*\n?/im, '').trim())), [m.text]);
   const send = useOffice((s) => s.send);
   const replaying = useOffice((s) => s.replaying);
   const [editing, setEditing] = useState(false);
@@ -93,16 +94,19 @@ function PlanMessage({ m }: { m: ChatMsg }) {
         <em className={`plan-state ${state}`}>{PLAN_STATE[state]}</em>
       </div>
       <div className="chat-bubble md" dangerouslySetInnerHTML={{ __html: html }} />
-      {showBranch && !editing && (
-        <label className="plan-branch" title="Le nom de la branche git de cette mission. Change-le comme tu veux : le travail continue dessus.">
-          <span>🌿 Branche</span>
-          <input value={shown} spellCheck={false} onChange={(e) => setBranch(e.target.value)} onBlur={() => branch !== null && setBranch(tidyBranch(branch))} />
-        </label>
-      )}
       {live && !editing && (
-        <div className="plan-actions">
-          <button className="btn small primary" onClick={approve}>Valider le plan</button>
-          <button className="btn small" onClick={() => { sfx('click'); setEditing(true); }}>Demander des changements</button>
+        <div className="plan-approve">
+          {showBranch && (
+            <label className="plan-branch" title="Le nom de la branche git de cette mission. Change-le comme tu veux : le travail continue dessus.">
+              <span>🌿 Branche</span>
+              <input value={shown} spellCheck={false} onChange={(e) => setBranch(e.target.value)} onBlur={() => branch !== null && setBranch(tidyBranch(branch))} />
+            </label>
+          )}
+          <div className="plan-actions">
+            <button className="btn primary" onClick={approve}>✓ Valider le plan</button>
+            <button className="btn" onClick={() => { sfx('click'); setEditing(true); }}>Demander des changements</button>
+          </div>
+          <p className="plan-hint">Valider : l’équipe se met au travail{showBranch ? ' sur cette branche' : ''}. Rien n’est modifié avant.</p>
         </div>
       )}
       {live && editing && (

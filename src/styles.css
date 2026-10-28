@@ -898,3 +898,25 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 .project-card .project-name { margin: 0 0 8px; display: grid; gap: 2px; font-size: 15px; }
 .project-card .project-name .path { font-size: 11.5px; word-break: break-all; }
+
+/* le plan : le bloc de validation, réuni au même endroit */
+.plan-approve { display: grid; gap: 8px; margin-top: 8px; padding: 10px; border-radius: 12px; background: rgba(var(--accent-rgb), 0.07); border: 1px solid rgba(var(--accent-rgb), 0.28); }
+.plan-approve .plan-branch { margin: 0; }
+.plan-approve .plan-actions { margin: 0; }
+.plan-approve .btn { padding: 8px 14px; font-size: 13px; }
+.plan-hint { margin: 0; font-size: 12px; color: var(--muted); }
+.chat-who em.plan-state:not(.approved):not(.cancelled) { font-size: 11px; padding: 2px 8px; background: rgba(var(--accent-rgb), 0.25); color: var(--ink); }
+
+/* le diff : d'abord ce qu'on relit, puis la suite (commiter, pousser) collée en bas */
+.git-state { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.git-state code, .git-dock code { font: 11.5px ui-monospace, monospace; background: var(--surface3); padding: 1px 5px; border-radius: 4px; }
+.git-chip { margin-left: auto; font: 700 11px var(--pixel); padding: 2px 9px; border-radius: 999px; background: var(--surface3); color: var(--muted); }
+.git-chip.commit { background: rgba(255, 201, 61, 0.16); color: #ffc93d; }
+.git-chip.push { background: rgba(var(--accent-rgb), 0.2); color: var(--ink); }
+.git-chip.ok { background: rgba(61, 220, 151, 0.15); color: var(--green); }
+.git-dock { position: sticky; bottom: -12px; z-index: 2; display: grid; gap: 10px; margin: 4px -12px -12px; padding: 12px 12px 24px; background: var(--surface); border-top: 1px solid var(--line2); border-radius: 0 0 12px 12px; }
+.git-step { display: grid; gap: 6px; }
+.git-step > b { font: 700 11px var(--pixel); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.git-step > .btn { justify-self: start; }
+.git-more { justify-content: flex-end; }
+.git-more .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

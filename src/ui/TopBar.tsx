@@ -141,9 +141,9 @@ export function TopBar() {
       {mission && (
         <div className="stats">
           <span title="Agents appelés">🤖 {stats.agents}</span>
-          <span title="Recherches sur internet">🔎 {stats.searches}</span>
-          <span title="Pages web lues">🌐 {stats.pages}</span>
-          <span title="Fichiers rendus">📄 {files}</span>
+          {!mission.project && <span title="Recherches sur internet">🔎 {stats.searches}</span>}
+          {!mission.project && <span title="Pages web lues">🌐 {stats.pages}</span>}
+          {!mission.project && <span title="Fichiers rendus">📄 {files}</span>}
         </div>
       )}
 
