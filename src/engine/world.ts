@@ -269,7 +269,8 @@ export class World {
         return;
       }
     }
-    // sinon : un tour dans la cour, un petit tour, ou on s'étire
+    // sinon : un moment dans la cour, un petit tour, ou on s'étire
+    if (Math.random() < 0.55 && this.yardActivity(a, taken)) return;
     if (Math.random() < 0.3) {
       const s = pick(SPOTS.yard);
       if (s) { go(s, 'down', 3500 + Math.random() * 3000, () => { a.thinkAt = this.time; }); return; }
@@ -278,6 +279,68 @@ export class World {
     const tiles = this.freeTiles().filter((t) => !taken.has(t.join(',')));
     const t = tiles[Math.floor(Math.random() * tiles.length)];
     if (t) this.queue(a, { t: 'walk', tile: t }, { t: 'wait', ms: 1200 + Math.random() * 1500, dir: 'down' });
+  }
+
+  /** La cour : s'asseoir sur un banc, arroser les fleurs, surveiller le barbecue. Faux si rien n'est libre. */
+  private yardActivity(a: Actor, taken: Set<string | null>): boolean {
+    const free = (t: Tile) => !taken.has(t.join(',')) && !!this.grid[t[1]]?.[t[0]];
+    const r = Math.random();
+    if (r < 0.4) {
+      // un banc : on s'y assoit un moment, face à la cour
+      const seats: [Tile, number][] = [[[2, 19], 2 * T + 8], [[4, 19], 4 * T + 8], [[17, 19], 17 * T + 8], [[19, 19], 19 * T + 8]];
+      const open = seats.filter(([t]) => free(t));
+      if (!open.length) return false;
+      const [tile, x] = open[Math.floor(Math.random() * open.length)];
+      a.at = tile.join(',');
+      this.queue(a,
+        { t: 'walk', tile, face: 'down' },
+        { t: 'call', fn: () => { a.doing = 'bench'; } },
+        { t: 'slide', to: { x, y: 20 * T + 8 }, speed: 16 },
+        { t: 'wait', ms: 5000 + Math.random() * 5000, dir: 'down' },
+        { t: 'call', fn: () => { if (Math.random() < 0.5) { this.fx.floatIcon(a.x, a.y - 24, 'idea'); a.happyUntil = this.time + 1; } } },
+        { t: 'wait', ms: 1500, dir: 'down' },
+        { t: 'slide', to: tileFeet(tile), speed: 20 },
+        { t: 'call', fn: () => { a.doing = ''; a.at = null; } },
+      );
+      return true;
+    }
+    if (r < 0.75) {
+      // les fleurs : un petit arrosage
+      const spots: Tile[] = [[5, 17], [6, 17], [15, 18]].filter((t) => free(t as Tile)) as Tile[];
+      if (!spots.length) return false;
+      const tile = spots[Math.floor(Math.random() * spots.length)];
+      a.at = tile.join(',');
+      const water = () => this.fx.floatIcon(a.x + 4, a.y - 20, 'drop');
+      this.queue(a,
+        { t: 'walk', tile, face: 'up' },
+        { t: 'wait', ms: 400, dir: 'up' },
+        { t: 'call', fn: water },
+        { t: 'wait', ms: 1000, dir: 'up' },
+        { t: 'call', fn: water },
+        { t: 'wait', ms: 1000, dir: 'up' },
+        { t: 'call', fn: () => { water(); this.fx.sparkle(a.x, a.y - 14, 4, '#3ddc97'); a.happyUntil = this.time + 1.2; } },
+        { t: 'wait', ms: 1200, dir: 'up' },
+        { t: 'call', fn: () => { a.at = null; } },
+      );
+      return true;
+    }
+    // le barbecue : on surveille la braise, et ça fume
+    const tile: Tile = [19, 17];
+    if (!free(tile)) return false;
+    a.at = tile.join(',');
+    const puff = () => this.fx.smoke(19 * T + 8, 16 * T + 4);
+    this.queue(a,
+      { t: 'walk', tile, face: 'up' },
+      { t: 'wait', ms: 300, dir: 'up' },
+      { t: 'call', fn: puff },
+      { t: 'wait', ms: 900, dir: 'up' },
+      { t: 'call', fn: puff },
+      { t: 'wait', ms: 900, dir: 'up' },
+      { t: 'call', fn: () => { puff(); this.fx.floatIcon(a.x, a.y - 24, 'heart'); a.cheerUntil = this.time + 1.2; } },
+      { t: 'wait', ms: 1400, dir: 'up' },
+      { t: 'call', fn: () => { a.at = null; } },
+    );
+    return true;
   }
 
   /** Il arrête ce qu'il faisait de son temps libre (et libère sa place sur le canapé). */

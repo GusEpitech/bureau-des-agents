@@ -7,6 +7,7 @@ import { replaySpeed, stopReplay } from '../net/link.ts';
 import { denseOf, projectModeOf, savePref, useOffice, type Tod } from '../state/store.ts';
 import { fmtClock } from './format.ts';
 import { startTour } from './tour.ts';
+import { Px } from './Px.tsx';
 
 export function Logo({ size = 26 }: { size?: number }) {
   return (
@@ -56,21 +57,21 @@ function ViewMenu() {
   return (
     <div className="view-menu" ref={box}>
       <button className={`tool-btn ${open ? 'on' : ''}`} aria-haspopup="menu" aria-expanded={open} title="Visite guidée, jukebox, heure du bureau, cadre vertical, tournage…" onClick={() => { sfx('click'); setOpen(!open); }}>
-        <span aria-hidden="true">🎛️</span><span className="tool-label">Affichage</span>
+        <span aria-hidden="true"><Px e="🎛️" /></span><span className="tool-label">Affichage</span>
       </button>
       {open && (
         <div className="menu" role="menu">
           {dense && (
             <button role="menuitem" onClick={run(() => { sfx('click'); useOffice.setState({ officeHidden: !officeHidden }); savePref('officeHidden', !officeHidden); })}>
-              <i>{officeHidden ? '🏢' : '⇤'}</i><span>{officeHidden ? 'Déplier le bureau animé' : 'Replier le bureau animé'}</span><kbd>O</kbd>
+              <i>{officeHidden ? <Px e="🏢" /> : '⇤'}</i><span>{officeHidden ? 'Déplier le bureau animé' : 'Replier le bureau animé'}</span><kbd>O</kbd>
             </button>
           )}
-          <button role="menuitem" onClick={run(() => void startTour())}><i>🎤</i><span>Visite guidée de Max</span><kbd>T</kbd></button>
-          <button role="menuitem" onClick={run(() => { sfx('open'); useOffice.setState({ modal: { kind: 'jukebox' } }); })}><i>{musicOn ? '🎶' : '🎵'}</i><span>Le jukebox{musicOn ? ' (en train de jouer)' : ''}</span><kbd>J</kbd></button>
-          <button role="menuitem" onClick={() => { sfx('click'); const n = TOD_NEXT[tod]; useOffice.setState({ tod: n }); savePref('tod', n); }}><i>{TOD_ICON[tod]}</i><span>Heure du bureau : {tod === 'auto' ? 'automatique' : TOD_LABEL[tod].toLowerCase()}</span><kbd>N</kbd></button>
+          <button role="menuitem" onClick={run(() => void startTour())}><i><Px e="🎤" /></i><span>Visite guidée de Max</span><kbd>T</kbd></button>
+          <button role="menuitem" onClick={run(() => { sfx('open'); useOffice.setState({ modal: { kind: 'jukebox' } }); })}><i><Px e={musicOn ? '🎶' : '🎵'} /></i><span>Le jukebox{musicOn ? ' (en train de jouer)' : ''}</span><kbd>J</kbd></button>
+          <button role="menuitem" onClick={() => { sfx('click'); const n = TOD_NEXT[tod]; useOffice.setState({ tod: n }); savePref('tod', n); }}><i><Px e={TOD_ICON[tod]} /></i><span>Heure du bureau : {tod === 'auto' ? 'automatique' : TOD_LABEL[tod].toLowerCase()}</span><kbd>N</kbd></button>
           <div className="menu-sep" />
-          <button role="menuitem" onClick={run(flip('vertical'))}><i>📱</i><span>Cadre vertical 9:16 {vertical ? '(activé)' : ''}</span><kbd>V</kbd></button>
-          <button role="menuitem" onClick={run(flip('filming'))}><i>🎬</i><span>Mode tournage (juste le bureau)</span><kbd>F</kbd></button>
+          <button role="menuitem" onClick={run(flip('vertical'))}><i><Px e="📱" /></i><span>Cadre vertical 9:16 {vertical ? '(activé)' : ''}</span><kbd>V</kbd></button>
+          <button role="menuitem" onClick={run(flip('filming'))}><i><Px e="🎬" /></i><span>Mode tournage (juste le bureau)</span><kbd>F</kbd></button>
         </div>
       )}
     </div>
@@ -122,7 +123,7 @@ export function TopBar() {
           <b>Le Bureau des agents</b>
           <span>{connection === 'demo' ? 'Démo · VibesMoney' : 'par VibesMoney'}</span>
         </div>
-        {projectName && <span className="project-badge" title="Mode projet : l’équipe travaille dans ce projet">🛠️ {projectName}{mission?.quick ? ' ⚡' : ''}</span>}
+        {projectName && <span className="project-badge" title="Mode projet : l’équipe travaille dans ce projet"><Px e="🛠️" /> {projectName}{mission?.quick ? <> <Px e="⚡" /></> : null}</span>}
       </div>
 
       <div className="mission-head">
@@ -134,16 +135,16 @@ export function TopBar() {
           </>
         ) : <span className="muted">Aucune mission en cours</span>}
         {mission && plan.length > 0 && (
-          <span className="plan-step" title={current?.text ?? ''}>📋 {done}/{plan.length}{current && busySince ? ` · ${current.text}` : ''}</span>
+          <span className="plan-step" title={current?.text ?? ''}><Px e="📋" /> {done}/{plan.length}{current && busySince ? ` · ${current.text}` : ''}</span>
         )}
       </div>
 
       {mission && (
         <div className="stats">
-          <span title="Agents appelés">🤖 {stats.agents}</span>
-          {!mission.project && <span title="Recherches sur internet">🔎 {stats.searches}</span>}
-          {!mission.project && <span title="Pages web lues">🌐 {stats.pages}</span>}
-          {!mission.project && <span title="Fichiers rendus">📄 {files}</span>}
+          <span title="Agents appelés"><Px e="🤖" /> {stats.agents}</span>
+          {!mission.project && <span title="Recherches sur internet"><Px e="🔎" /> {stats.searches}</span>}
+          {!mission.project && <span title="Pages web lues"><Px e="🌐" /> {stats.pages}</span>}
+          {!mission.project && <span title="Fichiers rendus"><Px e="📄" /> {files}</span>}
         </div>
       )}
 
@@ -171,12 +172,12 @@ export function TopBar() {
             {quota && <span className="energy-pct">{Math.round((1 - quota.fiveHour) * 100)} %</span>}
           </button>
         )}
-        <button className="tool-btn" title="Toute l’équipe : les métiers, leurs outils, l’historique" onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'team' } }); }}><span aria-hidden="true">👥</span><span className="tool-label">Équipe</span></button>
-        <button className="tool-btn" title="Les missions précédentes (H)" onClick={() => { sfx('open'); useOffice.setState({ historyOpen: true }); }}><span aria-hidden="true">🗂️</span><span className="tool-label">Historique</span></button>
+        <button className="tool-btn" title="Toute l’équipe : les métiers, leurs outils, l’historique" onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'team' } }); }}><span aria-hidden="true"><Px e="👥" /></span><span className="tool-label">Équipe</span></button>
+        <button className="tool-btn" title="Les missions précédentes (H)" onClick={() => { sfx('open'); useOffice.setState({ historyOpen: true }); }}><span aria-hidden="true"><Px e="🗂️" /></span><span className="tool-label">Historique</span></button>
         <span className="tool-sep" aria-hidden="true" />
-        <button className="icon-btn" title={sound ? 'Couper le son (M)' : 'Remettre le son (M)'} aria-label={sound ? 'Couper le son' : 'Remettre le son'} onClick={() => toggle('sound')}>{sound ? '🔊' : '🔇'}</button>
+        <button className="icon-btn" title={sound ? 'Couper le son (M)' : 'Remettre le son (M)'} aria-label={sound ? 'Couper le son' : 'Remettre le son'} onClick={() => toggle('sound')}><Px e={sound ? '🔊' : '🔇'} /></button>
         <ViewMenu />
-        <button className="tool-btn" title="Réglages" onClick={() => { sfx('open'); useOffice.setState({ settingsOpen: true }); }}><span aria-hidden="true">⚙️</span><span className="tool-label">Réglages</span></button>
+        <button className="tool-btn" title="Réglages" onClick={() => { sfx('open'); useOffice.setState({ settingsOpen: true }); }}><span aria-hidden="true"><Px e="⚙️" /></span><span className="tool-label">Réglages</span></button>
       </div>
     </header>
   );

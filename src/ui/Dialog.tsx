@@ -10,6 +10,8 @@ import { denseOf, pendingPlanOf, projectModeOf, useOffice } from '../state/store
 import { tilde } from './format.ts';
 import { tidy } from './tidy.ts';
 import { dictationHelp, useDictation } from './voice.ts';
+import { Px, ico } from './Px.tsx';
+import { Select } from './Select.tsx';
 
 export const EXAMPLES: { label: string; prompt: string }[] = [
   {
@@ -137,7 +139,7 @@ export function AskBar() {
   const answer = (allow: boolean) => { sfx(allow ? 'yes' : 'no'); send({ t: 'answer', requestId: a.requestId, allow }); };
   return (
     <div className="askbar">
-      <div className="askbar-head">🙋 <b style={{ color: ROLES[role].color }}>{who}</b> te demande la permission{asks.length > 1 ? ` (et ${asks.length - 1} autre${asks.length > 2 ? 's' : ''})` : ''}</div>
+      <div className="askbar-head"><Px e="🙋" /> <b style={{ color: ROLES[role].color }}>{who}</b> te demande la permission{asks.length > 1 ? ` (et ${asks.length - 1} autre${asks.length > 2 ? 's' : ''})` : ''}</div>
       <div className="askbar-label">{a.label}</div>
       {!a.full && a.detail && <pre className="askbar-detail">{a.detail}</pre>}
       <div className="askbar-actions">
@@ -240,7 +242,7 @@ function Composer() {
           <>
             {text.trim() && <button className="btn primary send" onClick={submit}>Envoyer</button>}
             {stuck
-              ? <button className="btn stop force" title="Coupe Claude Code et tout ce qu’il a lancé, même s’il ne répond plus" onClick={() => stop(true)}>⚠ Forcer l’arrêt</button>
+              ? <button className="btn stop force" title="Coupe Claude Code et tout ce qu’il a lancé, même s’il ne répond plus" onClick={() => stop(true)}><Px e="⚠" /> Forcer l’arrêt</button>
               : <button className="btn stop" title="Maj + clic : arrêt forcé" onClick={(e) => stop(e.shiftKey)}>■ Arrêter</button>}
           </>
         ) : (
@@ -254,7 +256,7 @@ function Composer() {
       </div>
       {mode === 'new' && !demo && !replaying && <FolderPick />}
       {dict.problem && (
-        <div className="hint" onClick={dict.clearProblem}>🎙️ {dictationHelp(dict.problem)}</div>
+        <div className="hint" onClick={dict.clearProblem}><Px e="🎙️" /> {dictationHelp(dict.problem)}</div>
       )}
     </div>
   );
@@ -276,8 +278,8 @@ function FolderPick() {
   return (
     <div className="folder-pick">
       <label className="fp-field">
-        <span>{workdir ? '🛠️ Projet' : '📁 Où ?'}</span>
-        <select value={workdir} title={workdir ? tilde(workdir) : 'Un dossier neuf est créé pour chaque mission'} onChange={(e) => choose(e.target.value)}>
+        <span>{ico(workdir ? '🛠️ Projet' : '📁 Où ?')}</span>
+        <Select value={workdir} title={workdir ? tilde(workdir) : 'Un dossier neuf est créé pour chaque mission'} onChange={choose}>
           <option value="">Un nouveau dossier de mission</option>
           {recent.length > 0 && (
             <optgroup label="Mes projets">
@@ -285,13 +287,13 @@ function FolderPick() {
             </optgroup>
           )}
           <option value={'\0pick'}>Choisir un autre dossier…</option>
-        </select>
+        </Select>
       </label>
       {workdir && (
         <div className="fp-mode" role="group" aria-label="Comment Max travaille">
           <div className="seg small">
-            <button className={!quick ? 'on' : ''} aria-pressed={!quick} onClick={() => { if (quick) { sfx('click'); send({ t: 'settings', settings: { quick: false } }); } }}>📋 Complet</button>
-            <button className={quick ? 'on quick' : ''} aria-pressed={quick} onClick={() => { if (!quick) { sfx('click'); send({ t: 'settings', settings: { quick: true } }); } }}>⚡ Rapide</button>
+            <button className={!quick ? 'on' : ''} aria-pressed={!quick} onClick={() => { if (quick) { sfx('click'); send({ t: 'settings', settings: { quick: false } }); } }}><Px e="📋" /> Complet</button>
+            <button className={quick ? 'on quick' : ''} aria-pressed={quick} onClick={() => { if (!quick) { sfx('click'); send({ t: 'settings', settings: { quick: true } }); } }}><Px e="⚡" /> Rapide</button>
           </div>
         </div>
       )}

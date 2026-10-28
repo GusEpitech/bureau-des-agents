@@ -13,6 +13,7 @@ import { sfx } from '../audio/sfx.ts';
 import { denseOf, techOf, useOffice, type ActView, type AskView } from '../state/store.ts';
 import { techLabel } from './tech.ts';
 import { tidy } from './tidy.ts';
+import { Px, ico } from './Px.tsx';
 
 const ICON: Record<ActKind, string> = {
   search: '🔎', web: '🌐', read: '📖', write: '✍️', edit: '✏️', bash: '💻', plan: '📋', skill: '🎓', mcp: '🔌', other: '⚙️',
@@ -23,10 +24,11 @@ export { perf };
 
 /** Les bulles accrochées aux robots : on les déplace à chaque image, sans repasser par React. */
 const bubbleEls = new Map<string, HTMLElement>();
-const widths = new WeakMap<HTMLElement, { key: string; half: number }>();
+const widths = new WeakMap<HTMLElement, { key: string; half: number; h: number }>();
 
 function placeBubbles(scale: number) {
   const stageW = W * scale;
+  const tags: { el: HTMLElement; x: number; y: number; half: number; h: number }[] = [];
   for (const [id, el] of bubbleEls) {
     const a = world.actors.get(id);
     if (!a) continue;
@@ -45,12 +47,27 @@ function placeBubbles(scale: number) {
       // la largeur de la bulle ne change qu'avec son texte ou la taille du bureau : on ne la mesure (ce qui force une mise en page) que là
       const key = `${scale}|${b.textContent}`;
       let m = widths.get(el);
-      if (!m || m.key !== key) { m = { key, half: b.offsetWidth / 2 }; widths.set(el, m); }
+      if (!m || m.key !== key) { m = { key, half: b.offsetWidth / 2, h: b.offsetHeight }; widths.set(el, m); }
       const half = m.half;
       if (x - half < 4) dx = 4 - (x - half);
       else if (x + half > stageW - 4) dx = stageW - 4 - (x + half);
     }
     el.style.setProperty('--dx', `${Math.round(dx)}px`);
+    if (b?.classList.contains('tag')) { const m = widths.get(el)!; tags.push({ el, x: x + Math.round(dx), y, half: m.half, h: m.h }); }
+  }
+  // les noms qui se chevauchent (des robots groupés) se rangent en escalier : celui qui est devant garde sa place, les autres montent
+  tags.sort((a, b) => b.y - a.y);
+  const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+  for (const t of tags) {
+    let lift = 0;
+    for (let tries = 0; tries < 5; tries++) {
+      const r = { x0: t.x - t.half - 2, x1: t.x + t.half + 2, y0: t.y - lift - t.h - 4, y1: t.y - lift - 4 };
+      const hit = placed.find((q) => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0);
+      if (!hit) { placed.push(r); break; }
+      lift = t.y - hit.y0 - 4 + 1;
+      if (tries === 4) placed.push(r);
+    }
+    t.el.style.setProperty('--ty', `${Math.round(lift)}px`);
   }
 }
 
@@ -334,10 +351,10 @@ function Bubble({ id, v }: { id: string; v: View }) {
         : v.mode === 'full' ? (
           <div className="bubble">
             <span className="bubble-name">{v.name}</span>
-            <span className="bubble-text">{v.icon && <i>{v.icon}</i>}{v.text}</span>
+            <span className="bubble-text">{v.icon && <i>{ico(v.icon)}</i>}{v.text}</span>
           </div>
-        ) : v.mode === 'icon' ? <div className="bubble-icon" title={v.name}>{v.icon}</div>
-          : v.mode === 'tag' ? <div className="tag">{v.icon ? `${v.icon} ` : ''}{v.name}</div> : null}
+        ) : v.mode === 'icon' ? <div className="bubble-icon" title={v.name}>{ico(v.icon)}</div>
+          : v.mode === 'tag' ? <div className="tag">{v.icon ? <>{ico(v.icon)} </> : null}{v.name}</div> : null}
     </div>
   );
 }
@@ -350,7 +367,7 @@ function AskBubble({ ask, name }: { ask: AskView; name: string }) {
   };
   return (
     <div className="bubble ask">
-      <span className="bubble-name">🙋 {name}</span>
+      <span className="bubble-name"><Px e="🙋" /> {name}</span>
       <span className="bubble-text">{short(ask.label)}</span>
       {ask.full ? (
         <span className="ask-actions">

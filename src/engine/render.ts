@@ -125,7 +125,7 @@ export class Renderer {
       items.push({ y: p.sortY, k: 0, draw: () => { g.drawImage(p.c, p.x + shake, p.y); this.furnitureLive(g, p, world, atDesk.get(p.f.id) ?? null, t); } });
     }
     for (const a of world.actors.values()) {
-      items.push({ y: a.seated && a.seat ? a.seat.y : a.doing === 'sofa' || a.doing === 'sleep' ? 14 * T + 16 : a.y, k: 1, draw: () => this.actor(g, a, world) });
+      items.push({ y: a.seated && a.seat ? a.seat.y : a.doing === 'sofa' || a.doing === 'sleep' ? 14 * T + 16 : a.doing === 'bench' ? a.y + 8 : a.y, k: 1, draw: () => this.actor(g, a, world) });
     }
     items.push({ y: world.cat.sortY, k: 2, draw: () => world.cat.draw(g) });
     items.sort((a, b) => a.y - b.y || a.k - b.k);
@@ -154,7 +154,7 @@ export class Renderer {
     // sur la musique, ceux qui ne marchent pas hochent la tête en rythme
     const y = Math.round(a.y) - (world.musicOn && world.time < world.bobUntil && !a.moving ? 1 : 0);
     g.globalAlpha = a.alpha;
-    const onSofa = a.doing === 'sofa' || a.doing === 'sleep';
+    const onSofa = a.doing === 'sofa' || a.doing === 'sleep' || a.doing === 'bench';
     if (!seated && !onSofa) {
       g.fillStyle = 'rgba(8,6,16,0.32)';
       g.fillRect(x - 5, y - 1, 10, 2);

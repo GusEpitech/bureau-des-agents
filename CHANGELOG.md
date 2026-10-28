@@ -47,10 +47,14 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - Les robots ont du poids : un petit rebond quand ils s'assoient (écrasé d'un pixel) et se lèvent (étiré), et en mission ils tournent d'abord la tête vers où ils vont avant de partir.
 - Quand tu valides le plan, Max tape dans ses mains, des étincelles vertes partent du tableau et les autres se tournent vers lui.
 - Le soir et la nuit, chaque bureau occupé allume sa lampe (flaque chaude sur le plateau) et l'éteint doucement quand son agent part.
+- La cour vit au repos : les robots s'assoient sur les bancs, arrosent les fleurs, surveillent le barbecue (qui fume).
 - La cour s'équipe : table de pique-nique avec parasol, massifs de fleurs, barbecue. Et Loula rejoint l'exploration.
 - Des textures plus détaillées : veines, nœuds et clous du parquet, passages usés, tapis avec franges et motifs, papier peint et boiseries, murs en briques, dalles fissurées et mousse dans la cour, fleurs dans l'herbe.
 
 **L'interface**
+- Les emojis sont remplacés par de vraies icônes en pixel art (une quarantaine, dessinées en code) : ils ne changent plus d'aspect d'un système à l'autre.
+- Les fenêtres, les alertes, les menus, les cases à cocher, les boutons ronds et les listes prennent le style pixel : coins francs, ombre pleine, titres en police pixel, coche orange. Le focus au clavier se voit partout.
+- Les noms des robots groupés au même endroit ne se chevauchent plus : ils se rangent en escalier.
 - Le panneau prend le style du bureau : cartes à coins francs avec une ombre pleine, boutons qui s'enfoncent quand on appuie, titres en police pixel, une trame de points discrète, des barres de défilement carrées.
 - La teinte de l'interface suit doucement l'heure et la météo du bureau (dorée le jour, rose le soir, bleutée la nuit, grise sous la pluie).
 - Un réglage « Fluidité » (économe, fluide à 60 images par seconde, ou max) dans les Réglages. Elle ne compte que quand quelque chose bouge : au repos, le bureau reste à 8 images par seconde.

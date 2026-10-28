@@ -7,6 +7,7 @@ import { sfx } from '../audio/sfx.ts';
 import { useOffice, type GitView } from '../state/store.ts';
 import { DiffSection, FileRow, Patch } from './Diff.tsx';
 import { tidy } from './tidy.ts';
+import { Px } from './Px.tsx';
 
 const READS = new Set<RepoOp>(['overview', 'branches', 'log', 'show', 'changes', 'diff']);
 
@@ -44,7 +45,7 @@ function Toolbar({ ask, locked }: { ask: (r: RepoReq) => void; locked: boolean }
     <div className="repo-bar">
       <div className="repo-row">
         <button className="repo-branch" title="Voir et changer de branche" onClick={() => { sfx('click'); go('branches'); }}>
-          🌿 <code>{ov.branch ?? (ov.merging ? 'rebase en cours' : `HEAD détachée (${ov.head})`)}</code> <span aria-hidden="true">▾</span>
+          <Px e="🌿" /> <code>{ov.branch ?? (ov.merging ? 'rebase en cours' : `HEAD détachée (${ov.head})`)}</code> <span aria-hidden="true">▾</span>
         </button>
         <span className="grow" />
         <button className="btn small" disabled={off || !ov.remote} title="git fetch : récupère les nouveautés du remote, sans rien changer chez toi" onClick={() => { sfx('click'); ask({ op: 'fetch' }); }}>
@@ -76,12 +77,12 @@ function Toolbar({ ask, locked }: { ask: (r: RepoReq) => void; locked: boolean }
       </div>
       {ov.merging && (
         <div className="repo-banner">
-          <span>⚠️ Une fusion (ou un rebase) est en cours{ov.conflicts ? ' : règle les conflits dans ton éditeur, puis commite.' : ' : termine-la avec git, ou annule.'}</span>
+          <span><Px e="⚠️" /> Une fusion (ou un rebase) est en cours{ov.conflicts ? ' : règle les conflits dans ton éditeur, puis commite.' : ' : termine-la avec git, ou annule.'}</span>
           <button className="btn small ghost" disabled={off} onClick={() => ask({ op: 'merge_abort' })}>Annuler</button>
         </div>
       )}
       {working && <p className="small muted">L’équipe travaille dans ce dépôt : changer de branche, pull et fusion attendent qu’elle ait fini.</p>}
-      {result && !result.ok && <p className="small git-result ko">⚠️ {tidy(result.text)}</p>}
+      {result && !result.ok && <p className="small git-result ko"><Px e="⚠️" /> {tidy(result.text)}</p>}
       {result?.ok && result.text && <p className="small git-result ok">✓ {tidy(result.text)}</p>}
     </div>
   );
@@ -135,7 +136,7 @@ function ChangesView({ ask, locked }: { ask: (r: RepoReq) => void; locked: boole
   if (!changes) return <p className="small muted">Je regarde les changements…</p>;
   return (
     <div className="repo-changes">
-      {changes.length === 0 && <p className="small muted">Rien à commiter : le dossier est propre. ✨</p>}
+      {changes.length === 0 && <p className="small muted">Rien à commiter : le dossier est propre. <Px e="✨" /></p>}
       {staged.length > 0 && (
         <section>
           <div className="repo-sec"><b>Prêts à commiter <span className="count">{staged.length}</span></b><button className="btn small ghost" onClick={() => ask({ op: 'unstage' })}>Tout retirer</button></div>
@@ -229,7 +230,7 @@ function GraphCell({ row, width }: { row: GraphRow; width: number }) {
 function RefChip({ r }: { r: string }) {
   if (r.startsWith('HEAD -> ')) return <span className="repo-ref head" title="Tu es ici">{r.slice(8)}</span>;
   if (r === 'HEAD') return <span className="repo-ref head">HEAD</span>;
-  if (r.startsWith('tag: ')) return <span className="repo-ref gittag">🏷 {r.slice(5)}</span>;
+  if (r.startsWith('tag: ')) return <span className="repo-ref gittag"><Px e="🏷" /> {r.slice(5)}</span>;
   if (r.includes('/')) return <span className="repo-ref remote">{r}</span>;
   return <span className="repo-ref local">{r}</span>;
 }

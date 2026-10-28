@@ -69,6 +69,7 @@ fournit le rythme de la musique (voir la boucle de `Office.tsx`).
 - **Sécurité** : le serveur n'écoute que sur 127.0.0.1 et vérifie l'origine des WebSocket ; l'équipe tourne en `--restricted`, avec
   seulement les outils de son métier, sauf en mode projet, où elle suit ta config Claude Code (réglages, hooks, MCP, skills,
   agents ; ni `--restricted` ni `--tools`) ; les sites créés s'affichent sous `/apercu/` dans un bac à sable (CSP `sandbox`).
+- **Icônes** : pas d'emoji à l'écran. Un emoji dans un texte passe par `<Px e="🛠️" />` ou `ico('🛠️ Projet')` (`src/ui/Px.tsx`), qui le remplace par une icône dessinée dans `src/engine/uiicons.ts` (nouvelle icône : une entrée dans `ROWS` et dans `EMOJI`).
 - **zustand** : un sélecteur qui renvoie un nouveau tableau ou objet passe par `useShallow`, sinon React boucle.
 - **Pas d'image externe** dans le bureau : un nouveau meuble se dessine en code dans `furniture.ts`, avec sa place dans `layout.ts`
   et, s'il est cliquable, une entrée dans `hits.ts` et `interact.ts`.

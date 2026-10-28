@@ -9,7 +9,7 @@ export function animateActor(a: Actor, dt: number, t: number, cat: Cat) {
   if (a.seated !== a.wasSeated) { a.wasSeated = a.seated; a.squashAt = t; a.squashKind = a.seated ? 'sit' : 'stand'; }
     const recent = t - a.actAt < 9;
   let pose: Pose;
-  if (a.doing === 'sofa' || a.doing === 'sleep') { pose = 'sit'; a.dir = 'down'; }
+  if (a.doing === 'sofa' || a.doing === 'sleep' || a.doing === 'bench') { pose = 'sit'; a.dir = 'down'; }
   else if (a.cur?.t === 'wait' && a.cur.pose) pose = a.cur.pose;
   else if (a.moving) pose = a.carrying ? 'carry' : 'walk';
   else if (a.doing === 'play') pose = 'type';

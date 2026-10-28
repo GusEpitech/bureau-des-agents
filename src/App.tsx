@@ -18,6 +18,7 @@ import { party } from './ui/interact.ts';
 import { Rooms } from './ui/Rooms.tsx';
 import { startTour, stopTour } from './ui/tour.ts';
 import { TopBar } from './ui/TopBar.tsx';
+import { Px, ico } from './ui/Px.tsx';
 
 const KONAMI = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
 
@@ -46,8 +47,8 @@ function ExitFilming() {
   }, []);
   return (
     <div className={`exit-filming ${shown ? 'shown' : ''}`}>
-      <button onClick={() => { useOffice.setState({ cameraAuto: !cameraAuto }); savePref('cameraAuto', !cameraAuto); }}>{cameraAuto ? '🎥 Caméra auto : oui' : '🎥 Caméra auto : non'}</button>
-      <button onClick={() => void startTour()}>🎤 Visite guidée</button>
+      <button onClick={() => { useOffice.setState({ cameraAuto: !cameraAuto }); savePref('cameraAuto', !cameraAuto); }}>{ico(cameraAuto ? '🎥 Caméra auto : oui' : '🎥 Caméra auto : non')}</button>
+      <button onClick={() => void startTour()}><Px e="🎤" /> Visite guidée</button>
       <button className="quit" onClick={() => useOffice.setState({ filming: false })}>✕ Quitter le tournage (F ou Échap)</button>
     </div>
   );
