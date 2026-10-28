@@ -28,6 +28,13 @@ export class Actor {
   eyes: Eyes = 'open';
   seat: Seat | null = null;
   seated = false;
+  /** le petit rebond à l'assise (-1) et au lever (+1) : quand ça a commencé, et ce que c'était */
+  wasSeated = false;
+  squashAt = -9;
+  squashKind: 'sit' | 'stand' = 'sit';
+  /** avant de partir en mission, il tourne la tête vers où il va : jusqu'à quand, et quand sa dernière marche s'est finie */
+  lookAheadUntil = 0;
+  walkEndAt = -9;
   standSpot: Tile | null = null;
   tasks: Task[] = [];
   cur: Task | null = null;
@@ -46,7 +53,7 @@ export class Actor {
   smokeUntil = 0;
   nextPuff = 0;
   /** ce qu'il fait de son temps libre : prendre des notes, regarder son téléphone, être assis ou dormir sur le canapé */
-  doing: '' | 'notes' | 'phone' | 'sofa' | 'sleep' = '';
+  doing: '' | 'notes' | 'phone' | 'sofa' | 'sleep' | 'play' | 'bench' = '';
   /** sa place sur le canapé (0 gauche, 1 droite), -1 s'il n'y est pas */
   slot = -1;
   // ── l'équipe qui vit au bureau : elle se balade en attendant, et prend un bureau quand Max l'appelle ──

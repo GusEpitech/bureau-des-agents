@@ -205,6 +205,59 @@ export interface GitStatus {
   gh: boolean;
 }
 
+// ── Le mode Git : le dépôt du dossier de travail, comme dans un IDE ──
+export type RepoOp =
+  | 'overview' | 'branches' | 'log' | 'show' | 'changes' | 'diff'
+  | 'fetch' | 'pull' | 'push' | 'checkout' | 'new_branch' | 'delete_branch' | 'merge' | 'merge_abort'
+  | 'stage' | 'unstage' | 'discard' | 'commit' | 'stash';
+
+/** Où en est le dépôt : la branche, ce qui est en avance ou en retard sur le remote, ce qui est en cours. */
+export interface RepoOverview {
+  branch: string | null;
+  head: string;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  staged: number;
+  unstaged: number;
+  untracked: number;
+  conflicts: number;
+  remote: boolean;
+  stashes: number;
+  /** une fusion est en cours (conflits à régler) */
+  merging: boolean;
+}
+
+export interface RepoBranch { name: string; current: boolean; remote: boolean; upstream?: string; ahead: number; behind: number; gone: boolean; hash: string; subject: string; at: number }
+
+export interface RepoCommit { hash: string; parents: string[]; author: string; at: number; subject: string; refs: string[] }
+
+/** Un fichier modifié : `index` = son état prêt à commiter, `work` = son état dans le dossier (lettres de « git status »). */
+export interface RepoChange { path: string; oldPath?: string; index: string; work: string }
+
+export interface RepoReq {
+  op: RepoOp;
+  /** log : la branche (ou tout l'historique) ; skip : pour charger la suite */
+  ref?: string;
+  all?: boolean;
+  skip?: number;
+  hash?: string;
+  path?: string;
+  paths?: string[];
+  staged?: boolean;
+  branch?: string;
+  /** checkout : la branche vient de origin (on la suit en local) */
+  remote?: boolean;
+  name?: string;
+  from?: string;
+  force?: boolean;
+  message?: string;
+  all_changes?: boolean;
+  pop?: boolean;
+  /** pull : fusionner ou rebaser quand les deux côtés ont avancé (sans cela : avance rapide seulement) */
+  mode?: 'merge' | 'rebase';
+}
+
 export type GitAction = 'status' | 'commit' | 'push' | 'switch_base' | 'delete_branch';
 
 // ── Navigateur → serveur ──
@@ -238,6 +291,8 @@ export type ClientMsg =
   | { t: 'diff'; missionId: string }
   /** mode projet : une action git sur la branche de la mission */
   | { t: 'git'; missionId: string; action: GitAction; message?: string }
+  /** mode Git : une demande sur le dépôt du dossier de travail */
+  | ({ t: 'repo' } & RepoReq)
   /** vérifie les connecteurs MCP (claude mcp list), dans le dossier de la mission ou du projet choisi */
   | { t: 'mcp_list' }
   /** mesure le quota maintenant (un tout petit appel à Haiku) */
@@ -263,6 +318,7 @@ export type ServerMsg =
   | { t: 'toast'; kind: 'info' | 'error'; text: string }
   /** mode projet : le diff (ok faux : text explique pourquoi il n'y en a pas) */
   | { t: 'diff'; missionId: string; ok: boolean; text?: string; note?: string; files: DiffFile[]; truncated: boolean }
+  | { t: 'repo'; op: RepoOp; ok: boolean; text?: string; overview?: RepoOverview; branches?: RepoBranch[]; commits?: RepoCommit[]; more?: boolean; skip?: number; changes?: RepoChange[]; files?: DiffFile[]; body?: string; hash?: string; path?: string; staged?: boolean }
   | { t: 'git_status'; missionId: string; status: GitStatus | null; text?: string }
   | { t: 'git_done'; missionId: string; action: GitAction; ok: boolean; text: string; url?: string }
   /** les connecteurs MCP vérifiés ; `place` : le dossier où on a vérifié (nom seul), `error` si ça a échoué */

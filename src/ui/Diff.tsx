@@ -5,6 +5,7 @@ import type { DiffFile, GitAction } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { useOffice } from '../state/store.ts';
 import { tidy } from './tidy.ts';
+import { Px } from './Px.tsx';
 
 const STATUS: Record<DiffFile['status'], [string, string]> = {
   added: ['A', 'Ajouté'], modified: ['M', 'Modifié'], deleted: ['D', 'Supprimé'], renamed: ['R', 'Renommé'],
@@ -25,7 +26,7 @@ function useSuggestedMessage() {
   }, [chat, title]);
 }
 
-const Patch = memo(function Patch({ f }: { f: DiffFile }) {
+export const Patch = memo(function Patch({ f }: { f: DiffFile }) {
   if (f.binary) return <p className="small muted diff-empty">Fichier binaire : pas d’aperçu.</p>;
   if (!f.patch) return <p className="small muted diff-empty">{f.truncated ? 'Trop gros pour être affiché ici.' : 'Pas de changement de contenu.'}</p>;
   const lines = f.patch.split('\n');
@@ -40,7 +41,7 @@ const Patch = memo(function Patch({ f }: { f: DiffFile }) {
   );
 });
 
-function FileRow({ f, open, onToggle }: { f: DiffFile; open: boolean; onToggle: () => void }) {
+export function FileRow({ f, open, onToggle }: { f: DiffFile; open: boolean; onToggle: () => void }) {
   const [letter, label] = STATUS[f.status];
   return (
     <div className={`diff-file ${open ? 'open' : ''}`}>
@@ -64,7 +65,7 @@ function GitState() {
   const todo = st.dirty ? ['commit', 'À commiter'] : st.branchExists && st.ahead > 0 ? ['push', `${st.ahead} commit${st.ahead > 1 ? 's' : ''} à pousser`] : ['ok', 'À jour'];
   return (
     <div className="git-state">
-      <span className="git-branch" title="La branche actuelle du projet">🌿 <code>{st.branch ?? 'HEAD détachée'}</code></span>
+      <span className="git-branch" title="La branche actuelle du projet"><Px e="🌿" /> <code>{st.branch ?? 'HEAD détachée'}</code></span>
       {st.base && st.branch !== st.base && <span className="muted small">depuis <code>{st.base}</code></span>}
       <span className={`git-chip ${todo[0]}`}>{todo[1]}</span>
       {st.missionBranch && !st.onMission && <span className="warn small">pas sur la branche de la mission</span>}
@@ -150,7 +151,7 @@ function GitDock() {
       {working && <p className="small muted">L’équipe travaille : les actions git attendent qu’elle ait fini.</p>}
       {result && (
         <p className={`small git-result ${result.ok ? 'ok' : 'ko'}`}>
-          {result.ok ? '✓ ' : '⚠️ '}{tidy(result.text)}
+          {result.ok ? '✓ ' : <><Px e="⚠️" /> </>}{tidy(result.text)}
           {result.url && <> <a href={result.url} target="_blank" rel="noopener noreferrer">{result.url.includes('/pull/') ? 'Ouvrir la PR' : 'Créer la PR'} ↗</a></>}
         </p>
       )}

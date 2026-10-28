@@ -7,6 +7,9 @@ import { applySound } from './audio/sound.ts';
 import { denseOf, hasPref, projectModeOf, savePref, techOf, useOffice, type Tod } from './state/store.ts';
 import { AskBar, Dialog } from './ui/Dialog.tsx';
 import { FinalCard, History, SettingsPanel, Toasts, Viewer } from './ui/Modals.tsx';
+import { timeOfDay } from './engine/instance.ts';
+import { weather } from './engine/weather.ts';
+import { DebugMenu } from './ui/Debug.tsx';
 import { Office } from './ui/Office.tsx';
 import { Panel } from './ui/Panel.tsx';
 import { Resizer } from './ui/Resizer.tsx';
@@ -15,6 +18,7 @@ import { party } from './ui/interact.ts';
 import { Rooms } from './ui/Rooms.tsx';
 import { startTour, stopTour } from './ui/tour.ts';
 import { TopBar } from './ui/TopBar.tsx';
+import { Px, ico } from './ui/Px.tsx';
 
 const KONAMI = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
 
@@ -43,14 +47,32 @@ function ExitFilming() {
   }, []);
   return (
     <div className={`exit-filming ${shown ? 'shown' : ''}`}>
-      <button onClick={() => { useOffice.setState({ cameraAuto: !cameraAuto }); savePref('cameraAuto', !cameraAuto); }}>{cameraAuto ? '🎥 Caméra auto : oui' : '🎥 Caméra auto : non'}</button>
-      <button onClick={() => void startTour()}>🎤 Visite guidée</button>
+      <button onClick={() => { useOffice.setState({ cameraAuto: !cameraAuto }); savePref('cameraAuto', !cameraAuto); }}>{ico(cameraAuto ? '🎥 Caméra auto : oui' : '🎥 Caméra auto : non')}</button>
+      <button onClick={() => void startTour()}><Px e="🎤" /> Visite guidée</button>
       <button className="quit" onClick={() => useOffice.setState({ filming: false })}>✕ Quitter le tournage (F ou Échap)</button>
     </div>
   );
 }
 
+/** L'ambiance du bureau (l'heure et la pluie), pour teinter doucement l'interface autour. */
+function useAmbience() {
+  const pref = useOffice((s) => s.tod);
+  const [look, setLook] = useState({ tod: timeOfDay(pref), rain: weather.raining });
+  useEffect(() => {
+    const read = () => {
+      const tod = timeOfDay(pref);
+      const rain = weather.raining;
+      setLook((l) => (l.tod === tod && l.rain === rain ? l : { tod, rain }));
+    };
+    read();
+    const id = setInterval(read, 2000);
+    return () => clearInterval(id);
+  }, [pref]);
+  return look;
+}
+
 export function App() {
+  const look = useAmbience();
   const vertical = useOffice((s) => s.vertical || s.portrait);
   const project = useOffice(projectModeOf);
   const filming = useOffice((s) => s.filming);
@@ -90,6 +112,7 @@ export function App() {
         window.dispatchEvent(new CustomEvent('bureau:tab', { detail: Number(e.code.slice(5)) - 1 }));
         return;
       }
+      if (k === 'f3') { e.preventDefault(); useOffice.setState({ debugOpen: !useOffice.getState().debugOpen }); return; }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const s = useOffice.getState();
       if (k === '/') { e.preventDefault(); focusComposer(); return; }
@@ -124,7 +147,7 @@ export function App() {
   }, []);
 
   return (
-    <div className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''} ${dense ? 'dense' : ''} ${officeHidden ? 'office-hidden' : ''}`}>
+    <div data-tod={look.tod} data-rain={look.rain ? '1' : '0'} className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''} ${dense ? 'dense' : ''} ${officeHidden ? 'office-hidden' : ''}`}>
       <div className="frame">
         <TopBar />
         <div
@@ -150,6 +173,7 @@ export function App() {
       <History />
       <SettingsPanel />
       <Toasts />
+      <DebugMenu />
     </div>
   );
 }

@@ -10,12 +10,13 @@ import { pendingPlanOf, projectModeOf, savePref, teamList, techOf, useOffice, ty
 import { techLabel } from './tech.ts';
 import { PromptBox, TechActs } from './Tech.tsx';
 import { ChatSection } from './Chat.tsx';
-import { DiffSection } from './Diff.tsx';
+import { GitSection } from './Git.tsx';
 import { EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
 import { FileActions } from './Rooms.tsx';
 import { tidy } from './tidy.ts';
+import { Px, ico } from './Px.tsx';
 
 export function Avatar({ role, size = 32 }: { role: Role; size?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -30,9 +31,9 @@ export function Avatar({ role, size = 32 }: { role: Role; size?: number }) {
 
 const STATUS: Record<AgentView['status'], string> = { working: 'Au travail', reporting: 'Rend son rapport', done: 'A rendu son travail', failed: 'N’a pas pu finir' };
 
-type Tab = 'chat' | 'mission' | 'diff';
+type Tab = 'chat' | 'mission' | 'git';
 const readTab = (): Tab => {
-  try { const v = localStorage.getItem('bureau:panelTab'); return v === '"mission"' ? 'mission' : v === '"diff"' ? 'diff' : 'chat'; } catch { return 'chat'; }
+  try { const v = localStorage.getItem('bureau:panelTab'); return v === '"mission"' ? 'mission' : v === '"diff"' || v === '"git"' ? 'git' : 'chat'; } catch { return 'chat'; }
 };
 
 export function Panel() {
@@ -42,15 +43,17 @@ export function Panel() {
   const project = useOffice(projectModeOf);
   const [picked, setTab] = useState(readTab);
   // l'onglet « Diff » n'existe qu'en mode projet
-  const tab: Tab = picked === 'diff' && !project ? 'chat' : picked;
+  const tab: Tab = picked === 'git' && !project ? 'chat' : picked;
   const pick = (t: Tab) => { setTab(t); savePref('panelTab', t); };
   // un plan de Max à valider : on ramène la conversation, c'est là qu'il se valide
   const planId = useOffice((s) => pendingPlanOf(s)?.requestId);
   useEffect(() => { if (planId) setTab('chat'); }, [planId]);
-  // Alt+1, Alt+2, Alt+3 (App.tsx) : les onglets dans l'ordre (le Diff seulement en mode projet)
+  // Alt+1, Alt+2, Alt+3 (App.tsx) : les onglets dans l'ordre (Git seulement en mode projet ; sans mission : l'accueil, puis Git)
   useEffect(() => {
     const onTab = (e: Event) => {
-      const tabs: Tab[] = useOffice.getState().mission?.project ? ['chat', 'mission', 'diff'] : ['chat', 'mission'];
+      const st = useOffice.getState();
+      const project = projectModeOf(st);
+      const tabs: Tab[] = st.mission ? (project ? ['chat', 'mission', 'git'] : ['chat', 'mission']) : project ? ['chat', 'git'] : ['chat'];
       const t = tabs[(e as CustomEvent<number>).detail];
       if (t) pick(t);
     };
@@ -59,25 +62,29 @@ export function Panel() {
   }, []);
   return (
     <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
-      {mission ? (
-        <>
-          <div className="panel-tabs">
-            <div className="seg">
-              <button className={tab === 'chat' ? 'on' : ''} onClick={() => pick('chat')}>💬 Conversation</button>
-              <button className={tab === 'mission' ? 'on' : ''} onClick={() => pick('mission')}>📋 La mission</button>
-              {project && <button className={tab === 'diff' ? 'on' : ''} onClick={() => pick('diff')}>🔀 Diff</button>}
-            </div>
-            {final && !busy && <button className="btn small ghost" title="Le récap de Max et les fichiers" onClick={() => { sfx('open'); useOffice.setState({ showFinal: true }); }}>Récap</button>}
+      {(mission || project) && (
+        <div className="panel-tabs">
+          <div className="seg">
+            {mission ? (
+              <>
+                <button className={tab === 'chat' ? 'on' : ''} onClick={() => pick('chat')}><Px e="💬" /> Conversation</button>
+                <button className={tab === 'mission' ? 'on' : ''} onClick={() => pick('mission')}><Px e="📋" /> La mission</button>
+              </>
+            ) : <button className={tab !== 'git' ? 'on' : ''} onClick={() => pick('chat')}><Px e="🏠" /> Accueil</button>}
+            {project && <button className={tab === 'git' ? 'on' : ''} onClick={() => pick('git')}><Px e="🔀" /> Git</button>}
           </div>
-          {tab === 'chat' ? <ChatSection /> : tab === 'diff' ? <DiffSection /> : (
-            <>
-              <PlanSection />
-              <TeamSection />
-              <FilesSection />
-              <FeedSection />
-            </>
-          )}
-        </>
+          {mission && final && !busy && <button className="btn small ghost" title="Le récap de Max et les fichiers" onClick={() => { sfx('open'); useOffice.setState({ showFinal: true }); }}>Récap</button>}
+        </div>
+      )}
+      {tab === 'git' ? <GitSection /> : mission ? (
+        tab === 'chat' ? <ChatSection /> : (
+          <>
+            <PlanSection />
+            <TeamSection />
+            <FilesSection />
+            <FeedSection />
+          </>
+        )
       ) : <Welcome />}
     </aside>
   );
@@ -87,7 +94,8 @@ function Welcome() {
   const missions = useOffice((s) => s.missions);
   const dir = useOffice((s) => s.dir);
   const send = useOffice((s) => s.send);
-  const connection = useOffice((s) => s.connection);
+  // « live » dès que la connexion s'ouvre, mais ce que dit le serveur (ton projet, ton dossier) arrive un instant après : on attend, pour que rien ne bouge
+  const connection = useOffice((s) => (s.connection === 'live' && !s.claude ? 'connecting' : s.connection));
   const project = useOffice(projectModeOf);
   const workdir = useOffice((s) => s.settings.workdir);
   const quick = useOffice((s) => s.settings.quick);
@@ -114,7 +122,7 @@ function Welcome() {
               <>
                 <li><b>Tu décris la petite tâche</b> en une phrase.</li>
                 <li><b>Max la fait tout seul</b>, sans plan ni équipe, sur une nouvelle branche git.</li>
-                <li><b>Tu relis le diff</b>, puis tu commites et tu pousses depuis l’onglet Diff.</li>
+                <li><b>Tu relis le diff</b>, puis tu commites et tu pousses depuis l’onglet Git.</li>
               </>
             ) : (
               <>
@@ -142,7 +150,7 @@ function Welcome() {
           <section className="card">
             <h3>Des idées de mission</h3>
             <div className="chips col">
-              {EXAMPLES.map((e) => <button key={e.label} className="chip" onClick={() => { sfx('click'); useOffice.setState({ draft: e.prompt }); }}>{e.label}</button>)}
+              {EXAMPLES.map((e) => <button key={e.label} className="chip" onClick={() => { sfx('click'); useOffice.setState({ draft: e.prompt }); }}>{ico(e.label)}</button>)}
             </div>
           </section>
         </>
@@ -153,7 +161,7 @@ function Welcome() {
           <h3>Dernières missions</h3>
           {missions.slice(0, 4).map((m) => (
             <div key={m.id} className="mini-mission">
-              <div><b>{m.title}</b><span className="small muted">{m.project ? `🛠️ ${m.project} · ` : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {m.files.length} rendu{m.files.length > 1 ? 's' : ''}</span></div>
+              <div><b>{m.title}</b><span className="small muted">{m.project ? <>{ico(`🛠️ ${m.project}`)} · </> : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {m.files.length} rendu{m.files.length > 1 ? 's' : ''}</span></div>
               <div className="row">
                 <button className="btn small" title="Rouvre la conversation : son récap, ses fichiers, et tu peux la continuer" onClick={() => { sfx('click'); send({ t: 'resume', missionId: m.id }); }}>Ouvrir</button>
                 <button className="btn small ghost" onClick={() => { sfx('click'); send({ t: 'replay', missionId: m.id }); }}>Rejouer</button>
@@ -226,7 +234,7 @@ function AgentCard({ a, open, onToggle }: { a: AgentView; open: boolean; onToggl
       <button className="agent-head" onClick={onToggle}>
         <Avatar role={a.role} size={30} />
         <div className="agent-id">
-          <b>{a.name} <span>{role.icon} {role.label}</span></b>
+          <b>{a.name} <span><Px e={role.icon} /> {role.label}</span></b>
           <span className="agent-task">{a.task}</span>
           <span className={`agent-now ${tech ? 'mono' : ''}`}>{working ? now : `${STATUS[a.status]}${a.leftAt ? ` · ${fmtDuration(a.leftAt - a.hiredAt)}` : ''}`}</span>
           {tech && <span className="agent-tech">{agentStats(a)}</span>}
@@ -247,7 +255,7 @@ function AgentCard({ a, open, onToggle }: { a: AgentView; open: boolean; onToggl
             <>
               <h4>Ce qu’il a fait</h4>
               <ul className="acts">
-                {a.acts.slice(-14).map((x) => <li key={x.id} title={x.detail}>{x.ok === false ? '⚠️ ' : ''}{x.label}</li>)}
+                {a.acts.slice(-14).map((x) => <li key={x.id} title={x.detail}>{x.ok === false ? <><Px e="⚠️" /> </> : ''}{x.label}</li>)}
               </ul>
             </>
           )}
@@ -282,12 +290,12 @@ function FilesSection() {
       <h3>{mission?.project ? 'Les fichiers modifiés' : 'Les rendus'} <span className="count">{files}</span></h3>
       {mission?.project && (
         <p className="small muted">
-          🛠️ {mission.project}{mission.branch ? <> · 🌿 <code>{mission.branch}</code> (partie de <code>{mission.baseBranch}</code>)</> : ' · pas de dépôt git'}
+          <Px e="🛠️" /> {mission.project}{mission.branch ? <> · <Px e="🌿" /> <code>{mission.branch}</code> (partie de <code>{mission.baseBranch}</code>)</> : ' · pas de dépôt git'}
         </p>
       )}
       {files ? <FileList /> : <p className="small muted">{mission?.project ? 'Les fichiers que l’équipe modifie arriveront ici.' : 'Les fichiers de l’équipe arriveront ici (et dans le dossier de la mission).'}</p>}
       <div className="row">
-        {mission?.project && mission.branch && <button className="btn small" onClick={() => { sfx('click'); window.dispatchEvent(new CustomEvent('bureau:tab', { detail: 2 })); }}>🔀 Voir le diff</button>}
+        {mission?.project && mission.branch && <button className="btn small" onClick={() => { sfx('click'); useOffice.setState({ gitView: 'mission' }); window.dispatchEvent(new CustomEvent('bureau:tab', { detail: 2 })); }}><Px e="🔀" /> Voir le diff</button>}
         {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir dans l’éditeur' : 'Ouvrir le dossier de la mission'}</button>}
       </div>
     </section>

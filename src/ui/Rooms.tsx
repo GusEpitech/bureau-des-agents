@@ -16,6 +16,7 @@ import { agentStats, Avatar } from './Panel.tsx';
 import { techLabel } from './tech.ts';
 import { PromptBox, TechActs } from './Tech.tsx';
 import { tidy } from './tidy.ts';
+import { Px, ico } from './Px.tsx';
 
 const ICON: Record<string, string> = {
   search: '🔎', web: '🌐', read: '📖', write: '✍️', edit: '✏️', bash: '💻', plan: '📋', skill: '🎓', mcp: '🔌', other: '⚙️',
@@ -62,12 +63,12 @@ function AgentRoom({ id }: { id: string }) {
   const role = roleInfo(a.role);
   const working = a.status === 'working' || a.status === 'reporting';
   return (
-    <Shell title={<>{a.name}</>} sub={`${role.icon} ${role.label} · ${a.task}`}>
+    <Shell title={<>{a.name}</>} sub={<><Px e={role.icon} /> {role.label} · {a.task}</>}>
       <div className="agent-hero" style={{ ['--c' as string]: role.color }}>
         <Avatar role={a.role} size={72} />
         <div>
           <span className={`pill-status ${a.status}`}>{working ? (live?.seated ? 'Au travail' : 'En chemin') : a.status === 'done' ? 'A rendu son travail' : 'N’a pas pu finir'}</span>
-          <p className="now">{working && a.act ? <><i>{ICON[a.act.kind]}</i>{tech ? <code>{tidy(techLabel(a.act.tool, a.act.raw, a.act.detail))}</code> : a.act.label}</> : a.status === 'done' ? 'Son rapport est sur le bureau de Max.' : working ? 'Il s’installe à son poste…' : ''}</p>
+          <p className="now">{working && a.act ? <><i><Px e={ICON[a.act.kind]} /></i>{tech ? <code>{tidy(techLabel(a.act.tool, a.act.raw, a.act.detail))}</code> : a.act.label}</> : a.status === 'done' ? 'Son rapport est sur le bureau de Max.' : working ? 'Il s’installe à son poste…' : ''}</p>
           <p className="small muted">Un vrai sous-agent Claude Code (« {role.type || 'renfort'} »), avec ses propres outils : {ROLE_TOOLS[a.role].join(', ') || 'ceux de Max'}.</p>
         </div>
       </div>
@@ -107,7 +108,7 @@ function ActList({ acts }: { acts: ActView[] }) {
     <ul className="act-list">
       {acts.slice(-40).map((x) => (
         <li key={x.id} className={x.ok === false ? 'fail' : ''}>
-          <i>{ICON[x.kind]}</i>
+          <i><Px e={ICON[x.kind]} /></i>
           <div>
             <span>{x.label}</span>
             {x.detail && x.detail !== x.label && <code>{(() => { const d = tidy(x.detail); return d.length > 160 ? d.slice(0, 159) + '…' : d; })()}</code>}
@@ -155,7 +156,7 @@ function BoardRoom() {
                 <Avatar role={a.role} size={26} />
                 <b>{a.name}</b>
                 <span className="who-task">{a.task}</span>
-                <span className="who-state">{a.status === 'done' ? '✓ rapport rendu' : a.status === 'failed' ? '✕ pas fini' : a.status === 'reporting' ? '📄 rend son rapport' : '… au travail'}</span>
+                <span className="who-state">{ico(a.status === 'done' ? '✓ rapport rendu' : a.status === 'failed' ? '✕ pas fini' : a.status === 'reporting' ? '📄 rend son rapport' : '… au travail')}</span>
               </button>
             ))}
           </div>
@@ -205,7 +206,7 @@ function ClockRoom() {
       <p className="center muted small">Ton équipe ne dort jamais : elle travaille à 3 h du matin comme à midi.</p>
       <div className="seg">
         {TODS.map(([v, l]) => (
-          <button key={v} className={tod === v ? 'on' : ''} onClick={() => { sfx('click'); useOffice.setState({ tod: v }); savePref('tod', v); }}>{l}</button>
+          <button key={v} className={tod === v ? 'on' : ''} onClick={() => { sfx('click'); useOffice.setState({ tod: v }); savePref('tod', v); }}>{ico(l)}</button>
         ))}
       </div>
     </Shell>
@@ -323,7 +324,7 @@ function JukeboxRoom() {
         ))}
       </ul>
       <div className="row">
-        <button className="btn" onClick={() => { useOffice.setState({ modal: null }); party(); }}>🪩 Mode soirée</button>
+        <button className="btn" onClick={() => { useOffice.setState({ modal: null }); party(); }}><Px e="🪩" /> Mode soirée</button>
         <span className="small muted">Morceaux originaux, composés pour le bureau avec ElevenLabs Music et Google Lyria.</span>
       </div>
     </Shell>
@@ -343,7 +344,7 @@ function TokenShare({ team }: { team: ReturnType<typeof teamList> }) {
     <div className="tok-share">
       <div className="tok-head"><b>{fmtTokens(total)} tokens</b> consommés par l’équipe jusqu’ici</div>
       <div className="tok-bar">{rows.map(([r, n]) => <i key={r} style={{ flex: n, background: ROLES[r].color }} title={`${roleInfo(r).label} : ${fmtTokens(n)} tokens`} />)}</div>
-      <div className="tok-legend">{rows.map(([r, n]) => <span key={r} style={{ ['--c' as string]: ROLES[r].color }}>{roleInfo(r).icon} {roleInfo(r).label} {Math.round((n / total) * 100)} %</span>)}</div>
+      <div className="tok-legend">{rows.map(([r, n]) => <span key={r} style={{ ['--c' as string]: ROLES[r].color }}><Px e={roleInfo(r).icon} /> {roleInfo(r).label} {Math.round((n / total) * 100)} %</span>)}</div>
       {top[0] === 'recherche' && top[1] / total >= 0.5 && <p className="small muted">L’exploration lit beaucoup de code : un modèle plus léger (Haiku) ou un effort faible, dans Réglages › Économiser des tokens, coûte nettement moins.</p>}
     </div>
   );
@@ -382,7 +383,7 @@ function UsageTab() {
           <h4>Par métier <small>(les agents)</small></h4>
           {usage.byRole.map((r) => (
             <div key={r.role} className="usage-row" style={{ ['--c' as string]: ROLES[r.role].color }}>
-              <span>{roleInfo(r.role).icon} {roleInfo(r.role).label}</span>
+              <span><Px e={roleInfo(r.role).icon} /> {roleInfo(r.role).label}</span>
               <i><u style={{ width: `${Math.max(2, (r.tokens / Math.max(usage.team, 1)) * 100)}%` }} /></i>
               <em title={r.thinking ? `${fmtTokens(r.output)} écrits dont ${fmtTokens(r.thinking)} de réflexion` : undefined}>{fmtTokens(r.tokens)} · {plural(r.agents, 'passage', 'passages')}{r.thinking ? ` · ${Math.round((r.thinking / Math.max(r.output, 1)) * 100)} % réflexion` : ''}</em>
             </div>
@@ -394,7 +395,7 @@ function UsageTab() {
           <h4>Par projet</h4>
           {usage.byProject.map((p) => (
             <div key={p.project} className="usage-row">
-              <span title={p.project || 'Missions libres'}>{p.project ? `🛠️ ${p.project}` : '📁 Missions libres'}</span>
+              <span title={p.project || 'Missions libres'}>{ico(p.project ? `🛠️ ${p.project}` : '📁 Missions libres')}</span>
               <i><u style={{ width: `${Math.max(2, (p.tokens / maxProject) * 100)}%` }} /></i>
               <em>{fmtTokens(p.tokens)} · {plural(p.missions, 'mission', 'missions')}</em>
             </div>
@@ -465,7 +466,7 @@ function TeamHistory() {
         <div className="chips">
           <button className={`chip ${role === null ? 'on' : ''}`} onClick={() => setRole(null)}>Tous</button>
           {roles.map(([r, n]) => (
-            <button key={r} className={`chip ${role === r ? 'on' : ''}`} onClick={() => setRole(role === r ? null : r)}>{roleInfo(r).icon} {roleInfo(r).label} <span className="count">{n}</span></button>
+            <button key={r} className={`chip ${role === r ? 'on' : ''}`} onClick={() => setRole(role === r ? null : r)}><Px e={roleInfo(r).icon} /> {roleInfo(r).label} <span className="count">{n}</span></button>
           ))}
         </div>
       )}
@@ -543,7 +544,7 @@ function TeamRoom({ role }: { role?: Role }) {
             {team.map((a) => (
               <button key={a.id} className={`who-row ${a.status}`} style={{ ['--c' as string]: ROLES[a.role].color }} title="Voir son travail" onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'agent', id: a.id } }); }}>
                 <Avatar role={a.role} size={26} />
-                <span className="who-id"><b>{a.name}</b><small>{roleInfo(a.role).icon} {roleInfo(a.role).label}{a.tokens ? ` · ${fmtTokens(a.tokens)} tokens` : ''}</small></span>
+                <span className="who-id"><b>{a.name}</b><small><Px e={roleInfo(a.role).icon} /> {roleInfo(a.role).label}{a.tokens ? ` · ${fmtTokens(a.tokens)} tokens` : ''}</small></span>
                 <span className="who-task">{a.task}</span>
                 <span className={`who-state ${a.status}`}>{a.status === 'done' ? '✓ rapport rendu' : a.status === 'failed' ? '✕ pas fini' : a.act ? a.act.label : '… au travail'}</span>
               </button>
@@ -559,11 +560,11 @@ function TeamRoom({ role }: { role?: Role }) {
               <div key={r} className={`role-card ${role === r ? 'focus' : ''}`} style={{ ['--c' as string]: ROLES[r].color }}>
                 <div className="role-head">
                   <Avatar role={r} size={34} />
-                  <div><b>{roleInfo(r).icon} {roleInfo(r).label}</b><span>{r === 'chef' ? 'Max, le chef' : `agent « ${roleInfo(r).type} »`}</span></div>
+                  <div><b><Px e={roleInfo(r).icon} /> {roleInfo(r).label}</b><span>{r === 'chef' ? 'Max, le chef' : `agent « ${roleInfo(r).type} »`}</span></div>
                 </div>
                 <p>{roleInfo(r).what}</p>
                 <div className="role-meta">
-                  <span className="chip-brain" title="Le modèle de ce métier (réglable dans les réglages)">🧠 {brain}</span>
+                  <span className="chip-brain" title="Le modèle de ce métier (réglable dans les réglages)"><Px e="🧠" /> {brain}</span>
                   <span className="muted small">{ROLE_TOOLS[r].length} outils</span>
                   {working(r) > 0 && <em className="role-busy">{working(r)} au travail</em>}
                 </div>
@@ -601,7 +602,7 @@ export function FileActions({ files, missionId, disabled, send }: { files: Retur
     <div className="files">
       {files.map((f) => (
         <div key={f.path} className="file">
-          <span className="file-icon">{fileIcon(f.ext)}</span>
+          <span className="file-icon"><Px e={fileIcon(f.ext)} /></span>
           <div className="file-id">
             <b title={f.path}>{f.name}</b>
             <span className="small muted">{fmtSize(f.size)} · par {f.by === 'chef' ? 'Max' : agents[f.by]?.name ?? 'l’équipe'}</span>
@@ -631,10 +632,10 @@ function PreviewRoom({ missionId, file }: { missionId: string; file: string }) {
       <div className="monitor" onClick={(e) => e.stopPropagation()}>
         <div className="monitor-bar">
           <span className="dots"><i /><i /><i /></span>
-          <span className="addr">🔒 {file}</span>
+          <span className="addr"><Px e="🔒" /> {file}</span>
           <div className="seg small">
-            <button className={device === 'desktop' ? 'on' : ''} onClick={() => setDevice('desktop')}>💻 Ordinateur</button>
-            <button className={device === 'phone' ? 'on' : ''} onClick={() => setDevice('phone')}>📱 Téléphone</button>
+            <button className={device === 'desktop' ? 'on' : ''} onClick={() => setDevice('desktop')}><Px e="💻" /> Ordinateur</button>
+            <button className={device === 'phone' ? 'on' : ''} onClick={() => setDevice('phone')}><Px e="📱" /> Téléphone</button>
           </div>
           <button className="btn small" onClick={() => setNonce((n) => n + 1)} title="Recharger">↻</button>
           <button className="btn small" title="Le code de la page, et ses versions successives" onClick={() => { useOffice.setState({ modal: null, viewer: { missionId, file } }); send({ t: 'read', missionId, file }); send({ t: 'versions', missionId, file }); }}>&lt;/&gt; Code et versions</button>

@@ -55,7 +55,7 @@ export function useDictation(getBase: () => string, onText: (text: string) => vo
 /** Ce qu'on affiche quand la dictée du navigateur ne marche pas. */
 export function dictationHelp(problem: string) {
   if (problem === 'not-allowed' || problem === 'service-not-allowed') {
-    return 'Le micro est bloqué pour cette page. Autorise-le dans la barre d’adresse, ou utilise la dictée du Mac : appuie deux fois sur la touche fn (ou 🎤), puis parle.';
+    return 'Le micro est bloqué pour cette page. Autorise-le dans la barre d’adresse, ou utilise la dictée du Mac : appuie deux fois sur la touche fn (ou le bouton micro), puis parle.';
   }
-  return 'Ce navigateur ne fait pas la dictée (Brave la bloque). Utilise la dictée du Mac : appuie deux fois sur la touche fn (ou 🎤), puis parle. Safari et Chrome la font aussi.';
+  return 'Ce navigateur ne fait pas la dictée (Brave la bloque). Utilise la dictée du Mac : appuie deux fois sur la touche fn (ou le bouton micro), puis parle. Safari et Chrome la font aussi.';
 }

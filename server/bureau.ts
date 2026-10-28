@@ -11,12 +11,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats, mcpPrefix } from '../shared/activity.ts';
 import { branchFromPlan, branchName, tidyBranch } from '../shared/branch.ts';
-import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, SearchHit, ServerMsg, Stats, WeekDay, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
+import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, RepoReq, SearchHit, ServerMsg, Stats, WeekDay, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
 import { createBranch, currentBranch, followedBranch, renamedBranch } from './branches.ts';
 import { openDb } from './db.ts';
 import { Library } from './library.ts';
 import { mcpList } from './mcp.ts';
 import { readLog, teamHistory } from './records.ts';
+import { repoRequest } from './repo.ts';
 import { README, readRules, RULES_FILE, RULES_TEMPLATE } from './rules.ts';
 import { DEFAULT_SETTINGS, MAX_RECENT, mergeSettings } from './settings.ts';
 import { StateStore } from './store.ts';
@@ -516,6 +517,20 @@ export class Bureau {
   /** Le bilan de consommation (la base SQLite) ; null si elle n'est pas disponible. */
   stats(days: number): Stats | null {
     return this.library ? this.library.stats(this.state.missions, days) : null;
+  }
+
+  /** Mode Git : une demande sur le dépôt du dossier de travail (les branches, l'historique, les changements, pull, push…). */
+  async repo(req: RepoReq): Promise<ServerMsg> {
+    const folder = this.state.settings.workdir;
+    if (!folder || !existsSync(folder)) return { t: 'repo', op: req.op, ok: false, text: 'Choisis d’abord un dossier de projet (sous la zone de saisie).' };
+    // pendant que l'équipe écrit dans le dépôt, on ne change pas de branche et on ne réécrit pas les fichiers sous ses pieds
+    const rewrites: RepoReq['op'][] = ['checkout', 'new_branch', 'delete_branch', 'pull', 'merge', 'merge_abort', 'stash', 'discard'];
+    if (rewrites.includes(req.op) && this.current?.busySince) {
+      return { t: 'repo', op: req.op, ok: false, text: 'L’équipe travaille dans ce dépôt : attends qu’elle ait fini.' };
+    }
+    const r = await repoRequest(folder, req);
+    // une mission dont la branche vient d'être renommée ou supprimée à la main : on la suit au prochain message (followBranch)
+    return { t: 'repo', op: req.op, ...r };
   }
 
   /** Les 7 derniers jours, pour le tableau du bureau. */

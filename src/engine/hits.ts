@@ -30,6 +30,10 @@ function furnitureLabel(id: string, kind: string, role?: Role): string {
     case 'bin': return 'La corbeille';
     case 'jukebox': return 'Le jukebox';
     case 'bench': return 'Un banc de la cour';
+    case 'foosball': return 'Le babyfoot de la cour : les pauses se jouent ici';
+    case 'picnic': return 'Une table de pique-nique';
+    case 'flowerbed': return 'Un massif de fleurs';
+    case 'bbq': return 'Un barbecue (pour les beaux jours)';
     case 'tree': return 'Un arbre de la cour';
     case 'ashtray': return 'Le cendrier : le coin des pauses clope (clique pour y envoyer quelqu’un)';
   }

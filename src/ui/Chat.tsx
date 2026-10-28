@@ -9,6 +9,7 @@ import { copyText, mdToHtml } from './md.ts';
 import { tidy } from './tidy.ts';
 import { fmtTokens } from './format.ts';
 import { branchFromPlan, tidyBranch } from '../../shared/branch.ts';
+import { Px } from './Px.tsx';
 
 const time = (at: number) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
@@ -17,7 +18,7 @@ const Message = memo(function Message({ m, tech }: { m: ChatMsg; tech: boolean }
   const html = useMemo(() => (m.kind === 'chef' || m.kind === 'final' ? mdToHtml(tidy(m.text)) : ''), [m.kind, m.text]);
   if (m.kind === 'plan') return <PlanMessage m={m} />;
   if (m.kind === 'note') return <div className="chat-note">{tidy(m.text)}{usage && <div className="chat-usage">{usage}</div>}</div>;
-  if (m.kind === 'error') return <div className="chat-note error">⚠️ {tidy(m.text)}</div>;
+  if (m.kind === 'error') return <div className="chat-note error"><Px e="⚠️" /> {tidy(m.text)}</div>;
   if (m.kind === 'user') {
     return (
       <div className="chat-msg user">
@@ -91,7 +92,7 @@ function PlanMessage({ m }: { m: ChatMsg }) {
   return (
     <div className={`chat-msg chef plan-msg ${state}`}>
       <div className="chat-who">
-        📝 Plan de Max <span>{time(m.at)}</span>
+        <Px e="📝" /> Plan de Max <span>{time(m.at)}</span>
         <em className={`plan-state ${state}`}>{PLAN_STATE[state]}</em>
       </div>
       <div className="chat-bubble md" dangerouslySetInnerHTML={{ __html: html }} />
@@ -99,7 +100,7 @@ function PlanMessage({ m }: { m: ChatMsg }) {
         <div className="plan-approve">
           {showBranch && (
             <label className="plan-branch" title="Le nom de la branche git de cette mission. Change-le comme tu veux : le travail continue dessus.">
-              <span>🌿 Branche</span>
+              <span><Px e="🌿" /> Branche</span>
               <input value={shown} spellCheck={false} onChange={(e) => setBranch(e.target.value)} onBlur={() => branch !== null && setBranch(tidyBranch(branch))} />
             </label>
           )}
@@ -144,7 +145,7 @@ function ContextBar() {
   const level = ctx >= 150_000 ? 'high' : ctx >= 100_000 ? 'warn' : 'ok';
   return (
     <div className={`ctx-bar ${level}`} title="Max relit toute la conversation à chaque tour : plus elle est longue, plus chaque message consomme de ton énergie.">
-      <span className="ctx-label">🧠 Mémoire de Max</span>
+      <span className="ctx-label"><Px e="🧠" /> Mémoire de Max</span>
       <span className="ctx-track"><i style={{ width: `${Math.min(100, (ctx / CTX_LIMIT) * 100)}%` }} /></span>
       <span className="ctx-num">{fmtTokens(ctx)} tokens</span>
       {level !== 'ok' && !replaying && (

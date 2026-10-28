@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { ROLES, roleInfo } from '../../shared/activity.ts';
 import { projectModeOf, teamList, useOffice } from '../state/store.ts';
 import { Avatar } from './Panel.tsx';
+import { Px } from './Px.tsx';
 
 export function Strips() {
   const plan = useOffice((s) => s.plan);
@@ -15,7 +16,7 @@ export function Strips() {
       <div className="strips">
         <div className="legend">
           {(['recherche', 'code', 'design', 'redaction', 'analyse'] as const).map((r) => (
-            <span key={r} style={{ ['--c' as string]: ROLES[r].color }}>{roleInfo(r).icon} {roleInfo(r).label}</span>
+            <span key={r} style={{ ['--c' as string]: ROLES[r].color }}><Px e={roleInfo(r).icon} /> {roleInfo(r).label}</span>
           ))}
         </div>
       </div>

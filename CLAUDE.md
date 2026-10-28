@@ -31,6 +31,7 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
   Côté navigateur, `projectModeOf` (store) pilote l'affichage : `roleInfo()` et `roleSign()` (`shared/activity.ts`) donnent les
   noms des métiers et des écriteaux selon le mode (à utiliser plutôt que `ROLES[r].label`), et `.app.project` passe l'accent
   au turquoise (`--accent-rgb` remplace les `rgba(255, 138, 61, …)`).
+- **Le mode Git** (onglet « Git » du panneau, dès qu'un dossier de travail est choisi, avec ou sans mission) : le dépôt du dossier comme dans un IDE. `server/repo.ts` répond aux demandes `repo` (`RepoReq` : `overview`, `branches`, `log`, `show`, `changes`, `diff`, `fetch`, `pull`, `push`, `checkout`, `new_branch`, `delete_branch`, `merge`, `stage`, `unstage`, `discard`, `commit`, `stash`…) sur `settings.workdir` : jamais un chemin du navigateur. Git est lancé sans shell, un seul à la fois par dépôt, et tout ce qui vient du navigateur (branches, empreintes, chemins) est vérifié avant d'arriver à git ; pas de push forcé. `Bureau.repo()` refuse de changer de branche, de tirer, de fusionner ou d'annuler pendant que l'équipe écrit. Côté navigateur, `src/ui/Git.tsx` : changements (prêts à commiter / modifiés, diff, commit, stash), historique avec graphe (`layoutGraph`), branches ; la 4e vue, « Mission », est l'ancien diff de la mission (`DiffSection`). `store.repo` garde ce que git a répondu.
 - **La conversation** : le store garde toute la conversation (`chat`, affichée par `src/ui/Chat.tsx`, onglet du panneau). Une
   mission passée se rouvre (`resume` → `current`) depuis l'enregistrement, et la mission ouverte est rouverte au redémarrage
   (`currentId` dans l'état) : Max reprend sa séance Claude Code (`--resume`) au message suivant, avec tout son historique.
@@ -40,7 +41,7 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).
 - **`src/engine/`** : le monde (`world.ts` : les événements, le chat, le mode soirée ; `actor.ts` : un robot et ses gestes ; `nav.ts` : se déplacer
   sans se coincer, A* dans `path.ts` ; `animate.ts` : pose et regard), le dessin (`render.ts`, `room.ts`,
-  `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 368), la caméra et son réalisateur
+  `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 368), la lumière (`render.ts` : la carte de lumière multipliée sur l'image ; `ambience.ts` : rayons des fenêtres, flaques sous les lampes et les écrans, poussière, traînée du néon, vignettage), la météo (`weather.ts` : pluie des fenêtres et de la cour, `__bureau.weather.force = 'rain' | 'clear' | 'auto'`) la vie de la cour (`yardlife.ts` : feuilles, lucioles, papillons), ce qu'on voit dehors (`outside.ts` : ciel des fenêtres, voiture dans la rue ; `deskstuff.ts` : l'objet de chaque bureau) et le fondu entre deux heures (`Renderer.draw`), la caméra et son réalisateur
   (`camera.ts`), les clics (`hits.ts`).
 - **`src/ui/`** : l'interface React. `Office.tsx` (le canevas, les bulles, la boucle d'animation), `Dialog.tsx` (Max et la boîte de
   saisie), `Rooms.tsx` (les fenêtres qu'on ouvre en cliquant), `interact.ts` (ce que fait chaque clic).
@@ -49,6 +50,8 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 - **`public/demo/mission.json`** : une vraie mission enregistrée, rejouée quand le serveur n'est pas là (`scripts/make-demo.ts`).
 
 ## Tester sans dépenser l'abonnement
+
+Le menu de debug (touche F3, `src/ui/Debug.tsx`) donne les mesures du dessin (`perf` dans `src/engine/debug.ts`, rempli par la boucle d'`Office.tsx`) et des interrupteurs (`debug` : météo, heure, vitesse, cadence, couches coupées). Pour mesurer ce que coûte un ajout de dessin, coupe sa couche et compare.
 
 Une mission enregistrée se rejoue à l'identique (`H`, puis « Rejouer »), et sans serveur le bureau passe en démo. Dans la console du
 navigateur, `window.__bureau` donne accès au store, au monde, à la caméra et à `playReplay(mission, log, vitesse)`.
@@ -61,10 +64,12 @@ fournit le rythme de la musique (voir la boucle de `Office.tsx`).
 - **Jamais de chemin complet ni de nom d'utilisateur à l'écran** : `tidy()` (`src/ui/tidy.ts`) et `tilde()` (`src/ui/format.ts`).
 - **Léger** : la boucle dessine au plus 24 images par seconde en mission, 8 au repos, rien quand l'onglet est caché ; environ une
   milliseconde par image. Pas de 3D, pas de bibliothèque lourde.
+- **Chargement** : le serveur compresse le texte (brotli ou gzip, gardé en mémoire) et garde `assets/` un an (noms à empreinte) ; `vite.config.ts` précharge les polices du premier affichage ; `projectModeOf` se souvient du dernier mode (`bureau:lastProject`) tant que le serveur n'a pas répondu, pour que la mise en page ne saute pas (CLS). Ne rends rien dans le panneau qui dépende de `hello` (dossier, projet) avant qu'il soit arrivé.
 - **Tokens** : le contexte de Max est mesuré à chaque tour (événement `ctx`, jauge dans la conversation) et chaque agent rend ses tokens à son départ (`leave.tokens`). Les réglages « Économiser des tokens » (`skills`, `mcpOff` par projet, `chefEffort`, `roleEffort`) se traduisent en options de `claude` (`--disable-slash-commands`, `--disallowedTools mcp__…`, `--effort`, champ `effort` des agents) dans `server/claude.ts`.
 - **Sécurité** : le serveur n'écoute que sur 127.0.0.1 et vérifie l'origine des WebSocket ; l'équipe tourne en `--restricted`, avec
   seulement les outils de son métier, sauf en mode projet, où elle suit ta config Claude Code (réglages, hooks, MCP, skills,
   agents ; ni `--restricted` ni `--tools`) ; les sites créés s'affichent sous `/apercu/` dans un bac à sable (CSP `sandbox`).
+- **Icônes** : pas d'emoji à l'écran. Un emoji dans un texte passe par `<Px e="🛠️" />` ou `ico('🛠️ Projet')` (`src/ui/Px.tsx`), qui le remplace par une icône dessinée dans `src/engine/uiicons.ts` (nouvelle icône : une entrée dans `ROWS` et dans `EMOJI`).
 - **zustand** : un sélecteur qui renvoie un nouveau tableau ou objet passe par `useShallow`, sinon React boucle.
 - **Pas d'image externe** dans le bureau : un nouveau meuble se dessine en code dans `furniture.ts`, avec sa place dans `layout.ts`
   et, s'il est cliquable, une entrée dans `hits.ts` et `interact.ts`.

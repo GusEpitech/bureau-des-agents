@@ -11,6 +11,8 @@ import { FileList } from './Panel.tsx';
 import { fmtDate, fmtDuration, plural, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
 import { tidy } from './tidy.ts';
+import { Px, ico } from './Px.tsx';
+import { Select } from './Select.tsx';
 
 /** La mission est rendue : Max te présente le travail de l'équipe. */
 export function FinalCard() {
@@ -36,10 +38,10 @@ export function FinalCard() {
         </div>
       </div>
       <div className="final-stats">
-        <span>🤖 {plural(stats.agents, 'agent', 'agents')}</span>
-        <span>🔎 {plural(stats.searches, 'recherche', 'recherches')}</span>
-        <span>🌐 {plural(stats.pages, 'page lue', 'pages lues')}</span>
-        <span>📄 {plural(files, 'rendu', 'rendus')}</span>
+        <span><Px e="🤖" /> {plural(stats.agents, 'agent', 'agents')}</span>
+        <span><Px e="🔎" /> {plural(stats.searches, 'recherche', 'recherches')}</span>
+        <span><Px e="🌐" /> {plural(stats.pages, 'page lue', 'pages lues')}</span>
+        <span><Px e="📄" /> {plural(files, 'rendu', 'rendus')}</span>
       </div>
       {html && <div className="md final-text" dangerouslySetInnerHTML={{ __html: html }} />}
       {files > 0 && <FileList />}
@@ -82,12 +84,12 @@ export function Viewer() {
           <b>{viewer.file}</b>
           <div className="row">
             {versions && versions.length > 1 && (
-              <select
+              <Select
                 className="versions"
                 title="L’historique des versions de ce fichier"
                 value={viewer.version ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value || undefined;
+                onChange={(val) => {
+                  const v = val || undefined;
                   useOffice.setState({ viewer: { ...viewer, text: undefined, version: v } });
                   send({ t: 'read', missionId: viewer.missionId, file: viewer.file, version: v });
                 }}
@@ -98,7 +100,7 @@ export function Viewer() {
                     v{versions.length - 1 - i} · {new Date(v.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })} · {v.by === 'chef' ? 'Max' : agents[v.by]?.name ?? 'l’équipe'}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
             <button className="btn small" onClick={() => send({ t: 'open', missionId: viewer.missionId, file: viewer.file })}>Ouvrir avec l’appli</button>
             <button className="close" onClick={close} aria-label="Fermer">×</button>
@@ -177,7 +179,7 @@ export function History() {
             <div className="chips">
               <button className={`chip ${project === null ? 'on' : ''}`} onClick={() => setProject(null)}>Tout</button>
               {projects.map((p) => (
-                <button key={p} className={`chip ${project === p ? 'on' : ''}`} onClick={() => setProject(p)}>{p ? `🛠️ ${p}` : '📁 Missions libres'}</button>
+                <button key={p} className={`chip ${project === p ? 'on' : ''}`} onClick={() => setProject(p)}>{ico(p ? `🛠️ ${p}` : '📁 Missions libres')}</button>
               ))}
             </div>
           )}
@@ -189,7 +191,7 @@ export function History() {
               <div className="hist-id">
                 <b>{m.title}</b>
                 <span className="small muted">
-                  {m.project ? `🛠️ ${m.project}${m.branch ? ` · 🌿 ${m.branch}` : ''} · ` : ''}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {plural(m.stats.agents, 'agent', 'agents')} · {plural(m.files.length, 'rendu', 'rendus')}
+                  {ico(m.project ? `🛠️ ${m.project}${m.branch ? ` · 🌿 ${m.branch}` : ''} · ` : '')}{fmtDate(m.createdAt)} · {fmtDuration(m.workMs)} · {plural(m.stats.agents, 'agent', 'agents')} · {plural(m.files.length, 'rendu', 'rendus')}
                   {m.status === 'working' ? ' · en cours' : m.status === 'done' ? '' : m.status === 'stopped' ? ' · arrêtée' : ' · en erreur'}
                 </span>
                 {hit && <span className="hist-snip small"><em>{HIT_KINDS[hit.kind] ?? hit.kind}</em> <Snippet text={hit.snippet} /></span>}
@@ -218,6 +220,7 @@ export function SettingsPanel() {
   const dir = useOffice((s) => s.dir);
   const voiceOn = useOffice((s) => s.voiceOn);
   const cameraAuto = useOffice((s) => s.cameraAuto);
+  const fluidity = useOffice((s) => s.fluidity);
   const tech = useOffice(techOf);
   const dense = useOffice(denseOf);
   if (!open) return null;
@@ -232,15 +235,15 @@ export function SettingsPanel() {
             <p className="set-help">Un modèle rapide suffit pour la plupart des missions. Le changement compte à la prochaine mission.</p>
             <label className="field">
               <span>Max, le chef</span>
-              <select value={settings.chefModel} onChange={(e) => send({ t: 'settings', settings: { chefModel: e.target.value } })}>
+              <Select value={settings.chefModel} onChange={(v) => send({ t: 'settings', settings: { chefModel: v } })}>
                 {CHEF_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="field">
               <span>L’équipe</span>
-              <select value={settings.teamModel} onChange={(e) => send({ t: 'settings', settings: { teamModel: e.target.value } })}>
+              <Select value={settings.teamModel} onChange={(v) => send({ t: 'settings', settings: { teamModel: v } })}>
                 {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
+              </Select>
             </label>
             <RoleModels />
           </section>
@@ -251,9 +254,9 @@ export function SettingsPanel() {
             <label className="radio"><input type="checkbox" checked={settings.skills} onChange={(e) => send({ t: 'settings', settings: { skills: e.target.checked } })} /> <span><b>Charger mes skills</b> : environ 7 000 tokens de plus à chaque tour. Décoché, Max travaille sans tes skills (le plus économe).</span></label>
             <label className="field">
               <span>Effort de réflexion de Max</span>
-              <select value={settings.chefEffort} onChange={(e) => send({ t: 'settings', settings: { chefEffort: e.target.value } })}>
+              <Select value={settings.chefEffort} onChange={(v) => send({ t: 'settings', settings: { chefEffort: v } })}>
                 {EFFORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
+              </Select>
             </label>
             <McpOffField />
           </section>
@@ -273,6 +276,14 @@ export function SettingsPanel() {
             <h3>L’affichage</h3>
             <label className="radio"><input type="checkbox" checked={dense} onChange={(e) => { useOffice.setState({ dense: e.target.checked }); savePref('dense', e.target.checked); }} /> <span><b>Vue développeur</b> : la conversation en grand, le bureau en petit, sans son par défaut (D)</span></label>
             <label className="radio"><input type="checkbox" checked={tech} onChange={(e) => { useOffice.setState({ tech: e.target.checked }); savePref('tech', e.target.checked); }} /> <span><b>Mode technique</b> : les vraies commandes, leurs sorties, les prompts et les tokens (X)</span></label>
+            <div className="radio" role="group" aria-label="Fluidité">
+              <span><b>Fluidité</b> : plus d’images par seconde, c’est plus doux mais ça chauffe plus (F3 pour mesurer)</span>
+              <span className="fluidity">
+                {([['eco', 'Économe', '8 à 24 images/s'], ['smooth', 'Fluide', '60 images/s'], ['max', 'Max', 'aussi vite que l’écran']] as const).map(([v, label, hint]) => (
+                  <button key={v} type="button" className={`btn ${fluidity === v ? 'primary' : ''}`} title={hint} onClick={() => { useOffice.setState({ fluidity: v }); savePref('fluidity', v); }}>{label}</button>
+                ))}
+              </span>
+            </div>
           </section>
 
           <section className="set-group">
@@ -299,7 +310,7 @@ export function SettingsPanel() {
             <span><kbd>/</kbd> ou <kbd>Ctrl</kbd>+<kbd>K</kbd> écrire à Max</span>
             <span><kbd>Alt</kbd>+<kbd>1</kbd>, <kbd>2</kbd>… onglets du panneau</span>
             <span><kbd>Échap</kbd> fermer, sortir du tournage, arrêter l’équipe</span>
-            <span>🥚 Il y a un code secret… (pense aux vieux jeux vidéo)</span>
+            <span><Px e="🥚" /> Il y a un code secret… (pense aux vieux jeux vidéo)</span>
           </div>
           </details>
         </div>
@@ -404,14 +415,14 @@ function RoleModels() {
       <div className="role-models">
         {MODEL_ROLES.map((r) => (
           <label key={r}>
-            <b>{roleInfo(r).icon} {roleInfo(r).label}</b>
-            <select value={settings.roleModels[r] ?? ''} onChange={(e) => set(r, e.target.value)} aria-label="Modèle">
+            <b><Px e={roleInfo(r).icon} /> {roleInfo(r).label}</b>
+            <Select value={settings.roleModels[r] ?? ''} onChange={(v) => set(r, v)} aria-label="Modèle">
               <option value="">Comme l’équipe ({team})</option>
               {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <select className="effort" value={settings.roleEffort?.[r] ?? ''} aria-label="Effort de réflexion" title="Effort de réflexion de ce métier" onChange={(e) => setEffort(r, e.target.value)}>
+            </Select>
+            <Select className="effort" value={settings.roleEffort?.[r] ?? ''} aria-label="Effort de réflexion" title="Effort de réflexion de ce métier" onChange={(v) => setEffort(r, v)}>
               {EFFORTS.map(([v, l]) => <option key={v} value={v}>{v ? `Effort : ${l.split(' (')[0].toLowerCase()}` : 'Effort : par défaut'}</option>)}
-            </select>
+            </Select>
           </label>
         ))}
       </div>

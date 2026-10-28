@@ -1,6 +1,7 @@
 // Le monde du bureau : les robots, ce qu'ils font, où ils vont. Chaque événement venu de Claude Code
 // devient une petite mise en scène : un membre de l'équipe arrive par la porte, va à son bureau, tape
 // ou lit selon ce qu'il fait vraiment, se lève pour rendre son rapport au chef, puis repart.
+import { weather } from './weather.ts';
 import type { ActKind, OfficeEvent, PlanItem, Role, WeekDay } from '../../shared/protocol.ts';
 import { Actor, smokePhase, smokeTip, type Pt, type Task } from './actor.ts';
 import { animateActor } from './animate.ts';
@@ -53,6 +54,10 @@ export class World {
   lampsOff = new Set<string>();
   /** le mode soirée (boule à facettes, tout le monde danse) */
   discoUntil = 0;
+  /** jusqu'à quand une partie de babyfoot est en cours */
+  playUntil = 0;
+  /** les demandes de permission qui sont des plans à valider */
+  private planAsks = new Set<string>();
   /** la musique du jukebox : est-ce qu'elle joue, et l'énergie des basses (0 à 1) */
   musicOn = false;
   musicLevel = 0;
@@ -210,7 +215,39 @@ export class World {
     } else if (r < 0.78) {
       const s = pick(SPOTS.jukebox);
       if (s) { go(s, 'down', 4000, () => { this.fx.floatIcon(a.x, a.y - 22, 'note'); a.cheerUntil = this.time + 1.5; }); return; }
-    } else if (r < 0.9) {
+    } else if (r < 0.85) {
+      // une partie de babyfoot à deux, dans la cour
+      const mate = [...this.residents].find((b) => b !== a && !b.busy && !b.seated && !b.onMission && !b.at && b.alpha > 0.9);
+      const pair = SPOTS.play.find(([p, q]) => !taken.has(p.join(',')) && !taken.has(q.join(',')));
+      if (mate && pair && this.time > this.playUntil) {
+        const [p, q] = pair;
+        const ms = 7000 + Math.random() * 3000;
+        const play = (who: Actor, tile: Tile, face: Dir, last: boolean) => {
+          who.at = tile.join(',');
+          who.nextWander = this.time + 14;
+          this.queue(who,
+            { t: 'walk', tile, face },
+            { t: 'wait', ms: 400, dir: face },
+            { t: 'call', fn: () => { who.doing = 'play'; this.playUntil = Math.max(this.playUntil, this.time + ms / 1000); } },
+            { t: 'wait', ms, dir: face },
+            { t: 'call', fn: () => {
+              who.doing = '';
+              who.at = null;
+              if (last) {
+                // le gagnant lève les bras, l'autre baisse les yeux
+                const [win, lose] = Math.random() < 0.5 ? [a, mate] : [mate, a];
+                win.cheerUntil = this.time + 1.8;
+                this.fx.floatIcon(win.x, win.y - 24, 'heart');
+                lose.sadUntil = this.time + 1.8;
+              }
+            } },
+          );
+        };
+        play(a, p, 'right', false);
+        play(mate, q, 'left', true);
+        return;
+      }
+    } else if (r < 0.93) {
       // une discussion à deux
       const mate = [...this.residents].find((b) => b !== a && !b.busy && !b.seated && !b.onMission && !b.at && b.alpha > 0.9);
       const spots = SPOTS.chat.filter(([p, q]) => this.grid[p[1]]?.[p[0]] && this.grid[q[1]]?.[q[0]] && !taken.has(p.join(',')) && !taken.has(q.join(',')));
@@ -232,7 +269,8 @@ export class World {
         return;
       }
     }
-    // sinon : un tour dans la cour, un petit tour, ou on s'étire
+    // sinon : un moment dans la cour, un petit tour, ou on s'étire
+    if (Math.random() < 0.55 && this.yardActivity(a, taken)) return;
     if (Math.random() < 0.3) {
       const s = pick(SPOTS.yard);
       if (s) { go(s, 'down', 3500 + Math.random() * 3000, () => { a.thinkAt = this.time; }); return; }
@@ -241,6 +279,68 @@ export class World {
     const tiles = this.freeTiles().filter((t) => !taken.has(t.join(',')));
     const t = tiles[Math.floor(Math.random() * tiles.length)];
     if (t) this.queue(a, { t: 'walk', tile: t }, { t: 'wait', ms: 1200 + Math.random() * 1500, dir: 'down' });
+  }
+
+  /** La cour : s'asseoir sur un banc, arroser les fleurs, surveiller le barbecue. Faux si rien n'est libre. */
+  private yardActivity(a: Actor, taken: Set<string | null>): boolean {
+    const free = (t: Tile) => !taken.has(t.join(',')) && !!this.grid[t[1]]?.[t[0]];
+    const r = Math.random();
+    if (r < 0.4) {
+      // un banc : on s'y assoit un moment, face à la cour
+      const seats: [Tile, number][] = [[[2, 19], 2 * T + 8], [[4, 19], 4 * T + 8], [[17, 19], 17 * T + 8], [[19, 19], 19 * T + 8]];
+      const open = seats.filter(([t]) => free(t));
+      if (!open.length) return false;
+      const [tile, x] = open[Math.floor(Math.random() * open.length)];
+      a.at = tile.join(',');
+      this.queue(a,
+        { t: 'walk', tile, face: 'down' },
+        { t: 'call', fn: () => { a.doing = 'bench'; } },
+        { t: 'slide', to: { x, y: 20 * T + 8 }, speed: 16 },
+        { t: 'wait', ms: 5000 + Math.random() * 5000, dir: 'down' },
+        { t: 'call', fn: () => { if (Math.random() < 0.5) { this.fx.floatIcon(a.x, a.y - 24, 'idea'); a.happyUntil = this.time + 1; } } },
+        { t: 'wait', ms: 1500, dir: 'down' },
+        { t: 'slide', to: tileFeet(tile), speed: 20 },
+        { t: 'call', fn: () => { a.doing = ''; a.at = null; } },
+      );
+      return true;
+    }
+    if (r < 0.75) {
+      // les fleurs : un petit arrosage
+      const spots: Tile[] = [[5, 17], [6, 17], [15, 18]].filter((t) => free(t as Tile)) as Tile[];
+      if (!spots.length) return false;
+      const tile = spots[Math.floor(Math.random() * spots.length)];
+      a.at = tile.join(',');
+      const water = () => this.fx.floatIcon(a.x + 4, a.y - 20, 'drop');
+      this.queue(a,
+        { t: 'walk', tile, face: 'up' },
+        { t: 'wait', ms: 400, dir: 'up' },
+        { t: 'call', fn: water },
+        { t: 'wait', ms: 1000, dir: 'up' },
+        { t: 'call', fn: water },
+        { t: 'wait', ms: 1000, dir: 'up' },
+        { t: 'call', fn: () => { water(); this.fx.sparkle(a.x, a.y - 14, 4, '#3ddc97'); a.happyUntil = this.time + 1.2; } },
+        { t: 'wait', ms: 1200, dir: 'up' },
+        { t: 'call', fn: () => { a.at = null; } },
+      );
+      return true;
+    }
+    // le barbecue : on surveille la braise, et ça fume
+    const tile: Tile = [19, 17];
+    if (!free(tile)) return false;
+    a.at = tile.join(',');
+    const puff = () => this.fx.smoke(19 * T + 8, 16 * T + 4);
+    this.queue(a,
+      { t: 'walk', tile, face: 'up' },
+      { t: 'wait', ms: 300, dir: 'up' },
+      { t: 'call', fn: puff },
+      { t: 'wait', ms: 900, dir: 'up' },
+      { t: 'call', fn: puff },
+      { t: 'wait', ms: 900, dir: 'up' },
+      { t: 'call', fn: () => { puff(); this.fx.floatIcon(a.x, a.y - 24, 'heart'); a.cheerUntil = this.time + 1.2; } },
+      { t: 'wait', ms: 1400, dir: 'up' },
+      { t: 'call', fn: () => { a.at = null; } },
+    );
+    return true;
   }
 
   /** Il arrête ce qu'il faisait de son temps libre (et libère sa place sur le canapé). */
@@ -314,6 +414,13 @@ export class World {
         const tiles = findPath(this.grid, a.tile, task.tile) ?? nearestReach(this.grid, a.tile, task.tile);
         a.path = smooth(this.grid, a, (tiles ?? [task.tile]).map(tileFeet), task.tile);
         if (task.then) a.path.push(task.then);
+        // en mission : il tourne d'abord la tête vers où il va, puis il part (sauf s'il enchaîne deux marches)
+        if (a.onMission && this.time - a.walkEndAt > 1 && a.path.length) {
+          const p = a.path[0];
+          const dx = p.x - a.x, dy = p.y - a.y;
+          a.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+          a.lookAheadUntil = this.time + 0.18;
+        }
         break;
       }
       case 'slide':
@@ -341,6 +448,7 @@ export class World {
       case 'walk':
       case 'slide':
       case 'sit': {
+        if (task.t === 'walk' && this.time < a.lookAheadUntil) return false;
         const speed = (task.t === 'slide' && task.speed) || (task.t === 'sit' ? 30 : WALK_SPEED * a.pace);
         let budget = speed * dt;
         const px = a.x, py = a.y;
@@ -370,6 +478,7 @@ export class World {
         }
         if (a.path.length) return false;
         a.moving = false;
+        a.walkEndAt = this.time;
         if (task.t === 'sit') { a.seated = true; a.seat = task.seat; a.dir = 'down'; }
         else if (task.face) a.dir = task.face;
         return true;
@@ -539,10 +648,18 @@ export class World {
       case 'ask': {
         const a = this.actors.get(ev.who) ?? chef;
         a.asks++;
+        if (ev.tool === 'ExitPlanMode') this.planAsks.add(ev.requestId);
         if (live) this.fx.floatIcon(a.x, a.y - 26, 'alert');
         break;
       }
       case 'ask_done':
+        // le plan est validé : Max tape dans ses mains, des étincelles vertes partent du tableau
+        if (this.planAsks.delete(ev.requestId) && ev.allow && live) {
+          chef.cheerUntil = this.time + 1.6;
+          chef.happyUntil = this.time + 2.2;
+          for (let i = 0; i < 3; i++) setTimeout(() => this.fx.sparkle(SPOTS.boardPx.x + (i - 1) * 40, 22, 8, '#3ddc97'), i * 160);
+          for (const b of this.actors.values()) if (b !== chef && !b.seated && !b.moving && b.alpha > 0.9) { b.dir = b.x < chef.x ? 'right' : 'left'; b.happyUntil = this.time + 1.4; }
+        }
         for (const a of this.actors.values()) if (a.asks > 0) { a.asks = Math.max(0, a.asks - 1); break; }
         break;
       case 'end':
@@ -639,7 +756,8 @@ export class World {
     const dt = Math.min(0.1, dtReal) * this.speed;
     this.time += dt;
     this.fx.update(dt);
-    let moving = this.fx.busy || this.time < this.printUntil || this.time < this.boardUntil;
+    weather.update(dt);
+    let moving = this.fx.busy || weather.raining || this.time < this.printUntil || this.time < this.boardUntil;
     const chef = this.chef;
     // la vapeur du café
     if (this.time > this.steamAt) { this.steamAt = this.time + 0.35; this.fx.steam(16 * T + 11, 13 * T + 4); }

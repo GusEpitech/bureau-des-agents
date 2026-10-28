@@ -81,7 +81,7 @@ export function roleOfType(type: string): Role {
 /** Les prénoms des robots, par métier (jamais deux fois le même dans une mission). */
 export const NAMES: Record<Role, string[]> = {
   chef: ['Max'],
-  recherche: ['Iris', 'Hugo', 'Léa', 'Malo', 'Zoé', 'Noé', 'Inès', 'Tom', 'Jade', 'Sacha', 'Lou', 'Nils'],
+  recherche: ['Iris', 'Loula', 'Léa', 'Malo', 'Zoé', 'Noé', 'Inès', 'Tom', 'Jade', 'Sacha', 'Lou', 'Nils'],
   code: ['Ada', 'Linus', 'Grace', 'Alan', 'Margaret', 'Dennis'],
   design: ['Frida', 'Coco', 'Henri', 'Sonia', 'Saul'],
   redaction: ['Colette', 'Victor', 'Simone', 'Jules', 'George'],

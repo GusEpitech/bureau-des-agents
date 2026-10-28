@@ -8,11 +8,13 @@
 import { execFile } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
+import { brotliCompress, constants as zlibConstants, gzip } from 'node:zlib';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { ClientMsg, ServerMsg } from '../shared/protocol.ts';
+import type { ClientMsg, RepoReq, ServerMsg } from '../shared/protocol.ts';
 import { Bureau } from './bureau.ts';
 import { findClaude } from './claude.ts';
 
@@ -56,6 +58,23 @@ const bureau = new Bureau(claude, broadcast, process.env.BUREAU_DIR);
 await bureau.init();
 
 // ── Le serveur web (le bureau compilé) ──
+// Le texte (script, style, page, JSON) part compressé : le script du bureau passe d'environ 480 Ko à 150 Ko. Chaque fichier
+// n'est compressé qu'une fois (gardé en mémoire tant qu'il ne change pas).
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.md', '.csv']);
+const brotli = promisify(brotliCompress);
+const gz = promisify(gzip);
+const packed = new Map<string, Buffer>();
+async function pack(file: string, body: Uint8Array, enc: 'br' | 'gzip'): Promise<Buffer> {
+  const key = `${enc}|${file}|${statSync(file).mtimeMs}`;
+  let out = packed.get(key);
+  if (!out) {
+    out = enc === 'br' ? await brotli(body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 6, [zlibConstants.BROTLI_PARAM_SIZE_HINT]: body.length } }) : await gz(body, { level: 9 });
+    if (packed.size > 60) packed.clear();
+    packed.set(key, out);
+  }
+  return out;
+}
+
 const server = http.createServer(async (req, res) => {
   const url0 = new URL(req.url ?? '/', 'http://x');
   if (url0.pathname.startsWith('/apercu/')) { await preview(url0, res); return; }
@@ -65,15 +84,25 @@ const server = http.createServer(async (req, res) => {
     let file = path.normalize(path.join(DIST, decodeURIComponent(url.pathname)));
     if (file !== DIST && !file.startsWith(DIST + path.sep)) { res.writeHead(403).end(); return; }
     if (!existsSync(file) || file === DIST || file.endsWith(path.sep)) file = path.join(DIST, 'index.html');
-    const body = await readFile(file);
+    let body: Uint8Array = await readFile(file);
     const ext = path.extname(file);
-    res.writeHead(200, {
+    // les fichiers de assets/ ont un nom qui change quand leur contenu change : on peut les garder un an
+    const hashed = path.relative(DIST, file).split(path.sep)[0] === 'assets';
+    const headers: Record<string, string | number> = {
       'Content-Type': TYPES[ext] ?? 'application/octet-stream',
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
+      'Cache-Control': ext === '.html' ? 'no-cache' : hashed ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
       'X-Content-Type-Options': 'nosniff',
       // aucun script venu d'ailleurs : même un lien piégé dans un rapport ne peut rien exécuter
       ...(ext === '.html' ? { 'Content-Security-Policy': CSP } : {}),
-    });
+    };
+    if (COMPRESSIBLE.has(ext) && body.length > 1024) {
+      const accepts = String(req.headers['accept-encoding'] ?? '');
+      const enc = /\bbr\b/.test(accepts) ? 'br' : /\bgzip\b/.test(accepts) ? 'gzip' : null;
+      if (enc) { body = await pack(file, body, enc); headers['Content-Encoding'] = enc; }
+      headers['Vary'] = 'Accept-Encoding';
+    }
+    headers['Content-Length'] = body.length;
+    res.writeHead(200, headers);
     res.end(body);
   } catch {
     res.writeHead(500).end('Le bureau n’est pas compilé : lance « npm start ».');
@@ -178,6 +207,19 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
     case 'stats': {
       const days = Math.max(0, Math.min(3650, Math.round(Number(m.days) || 0)));
       send({ t: 'stats', stats: bureau.stats(days) });
+      break;
+    }
+    case 'repo': {
+      // seulement ce que git comprend : chaque champ est vérifié (types, longueurs) ici, puis encore dans repo.ts
+      const op = str(m.op, 20) as RepoReq['op'];
+      const strs = (v: unknown) => (Array.isArray(v) ? v.slice(0, 500).map((x) => str(x, 1000)) : undefined);
+      send(await bureau.repo({
+        op, ref: m.ref === undefined ? undefined : str(m.ref, 200), all: m.all === true, skip: Number(m.skip) || 0, hash: m.hash === undefined ? undefined : str(m.hash, 40),
+        path: m.path === undefined ? undefined : str(m.path, 1000), paths: strs(m.paths), staged: m.staged === true,
+        branch: m.branch === undefined ? undefined : str(m.branch, 200), remote: m.remote === true, name: m.name === undefined ? undefined : str(m.name, 200),
+        from: m.from === undefined ? undefined : str(m.from, 200), force: m.force === true, message: m.message === undefined ? undefined : str(m.message, 10_000),
+        all_changes: m.all_changes === true, pop: m.pop === true, mode: m.mode === 'merge' || m.mode === 'rebase' ? m.mode : undefined,
+      }));
       break;
     }
     case 'week':

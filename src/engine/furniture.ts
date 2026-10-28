@@ -538,6 +538,90 @@ function treeSprite(seed: number): Sprite {
   return { c, ox: -8, oy: -28, sort: 15 };
 }
 
+/** Une table de pique-nique de la cour, avec son parasol. */
+function picnicSprite(): Sprite {
+  const c = makeCanvas(32, 30);
+  const g = g2d(c);
+  // le parasol
+  vline(g, 15, 3, 12, P.woodLeg);
+  for (let y = 0; y < 5; y++) {
+    const half = 13 - y * 2;
+    for (let x = 16 - half; x < 16 + half; x++) px(g, x, 2 + y, (Math.floor((x - (16 - half)) / 4) + y) % 2 ? '#f4efe6' : '#e2574c');
+  }
+  // la table et ses deux bancs
+  rect(g, 2, 15, 28, 3, P.wood);
+  hline(g, 2, 15, 28, P.woodHi);
+  rect(g, 2, 18, 28, 1, P.woodFront);
+  rect(g, 0, 22, 32, 2, P.wood);
+  hline(g, 0, 22, 32, P.woodHi);
+  for (const x of [5, 25]) rect(g, x, 19, 2, 9, P.woodLeg);
+  rect(g, 13, 13, 3, 2, '#f6f2e9');
+  px(g, 14, 12, P.orange);
+  outline(c, P.ink);
+  return { c, ox: 0, oy: -14, sort: 15 };
+}
+
+/** Un babyfoot : un cadre en bois, le terrain vert, des rangées de petits joueurs et deux poignées à chaque bout. */
+function foosballSprite(): Sprite {
+  const c = makeCanvas(32, 22);
+  const g = g2d(c);
+  rect(g, 2, 8, 28, 9, '#6b3b22');
+  hline(g, 2, 8, 28, '#9a5a32');
+  rect(g, 3, 9, 26, 6, '#2f8a4a');
+  for (let x = 4; x < 28; x += 4) vline(g, x, 9, 6, '#3aa05a');
+  vline(g, 15, 9, 6, '#d8f0d8');
+  rect(g, 2, 15, 28, 3, '#4a2a18');
+  for (const x of [3, 27]) rect(g, x, 18, 2, 3, '#2a1810');
+  // les tiges, les joueurs rouges et bleus, les poignées
+  for (const [x, col] of [[7, '#e2574c'], [11, '#e2574c'], [19, '#4d7fc0'], [23, '#4d7fc0']] as [number, string][]) {
+    hline(g, x, 12, 1, '#c9cbd6');
+    rect(g, x - 1, 10, 3, 1, col);
+    rect(g, x - 1, 13, 3, 1, col);
+  }
+  rect(g, 0, 11, 3, 2, '#2b2836');
+  rect(g, 29, 11, 3, 2, '#2b2836');
+  outline(c, P.ink);
+  return { c, ox: 0, oy: -6, sort: 15 };
+}
+
+/** Un massif de fleurs. */
+function flowerbedSprite(seed: number): Sprite {
+  const c = makeCanvas(32, 14);
+  const g = g2d(c);
+  const r = rng(seed);
+  rect(g, 0, 7, 32, 6, '#8a6a4a');
+  hline(g, 0, 7, 32, '#a98562');
+  rect(g, 0, 12, 32, 1, '#5e4130');
+  rect(g, 1, 3, 30, 5, '#5a3a28');
+  const cols = ['#ff7aa8', '#ffd24a', '#f4efe6', '#b88aff', '#ff8a3d'];
+  for (let x = 2; x < 30; x += 3) {
+    const h = 1 + Math.floor(r() * 3);
+    vline(g, x + 1, 3 - h, h + 1, P.leaf);
+    px(g, x, 2 - h, cols[Math.floor(r() * cols.length)]);
+    px(g, x + 1, 1 - h + 1, cols[Math.floor(r() * cols.length)]);
+    px(g, x + 2, 3 - h, P.leafHi);
+  }
+  outline(c, P.ink);
+  return { c, ox: 0, oy: 4, sort: 12 };
+}
+
+/** Un barbecue sur roulettes. */
+function bbqSprite(): Sprite {
+  const c = makeCanvas(16, 20);
+  const g = g2d(c);
+  ellipse(g, 8, 6, 7, 5, '#2b2836');
+  rect(g, 1, 6, 14, 2, '#3a3646');
+  hline(g, 2, 5, 12, '#6a6580');
+  px(g, 5, 7, '#ff5a2a'); px(g, 8, 7, P.orange); px(g, 11, 7, '#ff5a2a');
+  rect(g, 4, 10, 1, 7, P.metalDark);
+  rect(g, 11, 10, 1, 7, P.metalDark);
+  rect(g, 3, 17, 3, 2, '#1c1a24');
+  rect(g, 10, 17, 3, 2, '#1c1a24');
+  rect(g, 13, 8, 2, 4, P.metal);
+  outline(c, P.ink);
+  return { c, ox: 0, oy: -4, sort: 15 };
+}
+
 /** Le cendrier sur pied de la cour. */
 function ashtraySprite(): Sprite {
   const c = makeCanvas(8, 17);
@@ -582,6 +666,10 @@ export function furnitureSprite(f: Furn): Sprite {
     case 'bench': s = benchSprite(); break;
     case 'tree': s = treeSprite(f.seed ?? 1); break;
     case 'ashtray': s = ashtraySprite(); break;
+    case 'foosball': s = foosballSprite(); break;
+    case 'picnic': s = picnicSprite(); break;
+    case 'flowerbed': s = flowerbedSprite(f.seed ?? 1); break;
+    case 'bbq': s = bbqSprite(); break;
   }
   cache.set(key, s);
   return s;

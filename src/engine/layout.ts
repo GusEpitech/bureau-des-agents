@@ -16,7 +16,7 @@ export const YARD_BOTTOM = 21;
 
 export type FurnKind =
   | 'desk' | 'chefDesk' | 'chair' | 'chefChair' | 'plantBig' | 'plantTall' | 'plantSmall' | 'rack' | 'printer'
-  | 'cooler' | 'coffee' | 'sofa' | 'tableLow' | 'shelf' | 'lamp' | 'easel' | 'bin' | 'jukebox' | 'bench' | 'tree' | 'ashtray';
+  | 'cooler' | 'coffee' | 'sofa' | 'tableLow' | 'shelf' | 'lamp' | 'easel' | 'bin' | 'jukebox' | 'bench' | 'tree' | 'ashtray' | 'picnic' | 'flowerbed' | 'bbq' | 'foosball';
 
 export interface Furn {
   id: string;
@@ -111,6 +111,11 @@ furn.push({ id: 'tree-br', kind: 'tree', tx: 14, ty: 21, w: 1, h: 1, seed: 16 })
 furn.push({ id: 'plant-yard', kind: 'plantBig', tx: 8, ty: 17, w: 1, h: 1, seed: 25 });
 furn.push({ id: 'lamp-yard-l', kind: 'lamp', tx: 8, ty: 19, w: 1, h: 1 });
 furn.push({ id: 'lamp-yard-r', kind: 'lamp', tx: 13, ty: 19, w: 1, h: 1 });
+furn.push({ id: 'picnic', kind: 'picnic', tx: 2, ty: 18, w: 2, h: 1 });
+furn.push({ id: 'foosball', kind: 'foosball', tx: 5, ty: 19, w: 2, h: 1 });
+furn.push({ id: 'flowers-l', kind: 'flowerbed', tx: 5, ty: 16, w: 2, h: 1, seed: 3 });
+furn.push({ id: 'flowers-r', kind: 'flowerbed', tx: 15, ty: 17, w: 2, h: 1, seed: 9 });
+furn.push({ id: 'bbq', kind: 'bbq', tx: 19, ty: 16, w: 1, h: 1 });
 
 export const FURNITURE = furn;
 export const SEATS = seats;
@@ -129,6 +134,8 @@ export const SPOTS = {
   chat: [[[7, 10], [8, 10]], [[12, 10], [13, 10]], [[8, 13], [9, 13]]] as [[number, number], [number, number]][],
   /** la pause clope : autour des cendriers de la cour */
   smoke: [[3, 18], [5, 18], [4, 19], [4, 17], [16, 18], [18, 18], [17, 19], [17, 17]] as [number, number][],
+  /** le babyfoot : où se mettent les deux joueurs (de chaque côté de la table) */
+  play: [[[4, 19], [7, 19]]] as [[number, number], [number, number]][],
   /** un tour dans la cour */
   yard: [[3, 16], [6, 18], [9, 16], [12, 16], [15, 16], [19, 19], [10, 20], [11, 18], [6, 20], [15, 19]] as [number, number][],
   doorOut: { x: 11 * T, y: 23 * T + 6 },
