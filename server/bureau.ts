@@ -11,7 +11,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats, mcpPrefix } from '../shared/activity.ts';
 import { branchFromPlan, branchName, DEFAULT_BRANCH_PATTERN, tidyBranch } from '../shared/branch.ts';
-import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
+import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, SearchHit, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
+import { Library } from './library.ts';
 import { mcpList } from './mcp.ts';
 import { ClaudeProcess, freshQuota, measureQuota, Normalizer, type ClaudeBinary, type TurnResult } from './claude.ts';
 import * as gitOps from './git.ts';
@@ -150,6 +151,7 @@ export class Bureau {
   private stateFile: string;
   private recDir: string;
   private verDir: string;
+  private library: Library | null = null;
   private state: State = { missions: [], settings: { ...DEFAULT_SETTINGS } };
   private saveTimer: NodeJS.Timeout | null = null;
   current: Current | null = null;
@@ -172,6 +174,7 @@ export class Bureau {
     const fresh = !existsSync(this.dir);
     await mkdir(this.recDir, { recursive: true });
     await mkdir(this.missionsDir, { recursive: true });
+    this.library = await Library.open(path.join(this.dir, '.bureau', 'bureau.db'), this.recDir);
     if (fresh) await writeFile(path.join(this.dir, 'LISEZ-MOI.md'), README);
     if (!existsSync(path.join(this.dir, RULES_FILE))) await writeFile(path.join(this.dir, RULES_FILE), RULES_TEMPLATE);
     if (existsSync(this.stateFile)) {
@@ -690,6 +693,11 @@ export class Bureau {
     const target = path.resolve(m.folder, rel);
     if (!target.startsWith(m.folder + path.sep) || !existsSync(target)) return null;
     return target;
+  }
+
+  /** Cherche dans l'historique (la base SQLite) ; rien si elle n'est pas disponible. */
+  search(q: string): SearchHit[] {
+    return this.library ? this.library.search(q.slice(0, 200), this.state.missions) : [];
   }
 
   /** Tous les agents passés au bureau, mission par mission (les plus récentes d'abord). */

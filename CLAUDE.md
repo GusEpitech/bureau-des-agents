@@ -31,6 +31,7 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 - **La conversation** : le store garde toute la conversation (`chat`, affichée par `src/ui/Chat.tsx`, onglet du panneau). Une
   mission passée se rouvre (`resume` → `current`) depuis l'enregistrement, et la mission ouverte est rouverte au redémarrage
   (`currentId` dans l'état) : Max reprend sa séance Claude Code (`--resume`) au message suivant, avec tout son historique.
+- **L'index de l'historique** : `server/library.ts` range le texte des missions (demandes, réponses de Max, rapports, plans, fichiers) dans `.bureau/bureau.db` (SQLite intégré à Node, FTS5) pour la recherche de « Mes missions » (`search`). Les `.jsonl` restent la source de vérité : l'index se met à jour tout seul quand un enregistrement change et peut être supprimé sans rien perdre. Sans `node:sqlite`, le bureau marche, sans la recherche.
 - **`shared/protocol.ts`** : tous les messages entre le serveur et le navigateur, et les événements (`OfficeEvent`) : `start`, `hire`,
   `act`, `report`, `leave`, `file`, `ask`, `end`… **`shared/activity.ts`** : les métiers, leurs outils, les textes affichés.
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).

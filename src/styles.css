@@ -962,3 +962,10 @@ body.resizing { cursor: col-resize; user-select: none; }
 .role-models select.effort { flex: 0 1 150px; }
 .mcp-off { display: grid; gap: 6px; max-height: 200px; overflow-y: auto; padding: 8px 10px; border-radius: 9px; background: var(--surface2); border: 1px solid var(--line); }
 .mcp-off em { font-style: normal; color: var(--muted); font-size: 12px; }
+
+/* recherche dans l'historique */
+.hist-search { width: 100%; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--line2); border-radius: 10px; background: var(--surface2); color: inherit; font: inherit; font-size: 13.5px; }
+.hist-search:focus { outline: 0; border-color: var(--orange); }
+.hist-snip { margin-top: 3px; color: var(--muted, inherit); white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hist-snip em { font-style: normal; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; margin-right: 4px; }
+.hist-snip mark { background: rgba(var(--accent-rgb), 0.3); color: inherit; border-radius: 3px; padding: 0 2px; }

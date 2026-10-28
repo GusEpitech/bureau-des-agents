@@ -170,6 +170,11 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
       send({ t: 'versions', missionId: m.missionId, file, list: await bureau.versions(str(m.missionId, 40), file) });
       break;
     }
+    case 'search': {
+      const q = str(m.q, 200);
+      send({ t: 'search', q, hits: bureau.search(q) });
+      break;
+    }
     case 'team_history':
       send({ t: 'team_history', entries: await bureau.teamHistory() });
       break;

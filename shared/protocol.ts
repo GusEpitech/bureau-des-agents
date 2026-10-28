@@ -80,6 +80,9 @@ export interface TurnUsage { input: number; output: number; cacheRead?: number; 
 
 export interface Logged { at: number; ev: OfficeEvent }
 
+/** Un résultat de la recherche dans l'historique : la mission, d'où vient l'extrait, et l'extrait (les mots trouvés sont entre \u0001 et \u0002). */
+export interface SearchHit { missionId: string; kind: string; snippet: string }
+
 /** Un connecteur MCP de Claude Code, tel qu'on peut le montrer (jamais ses arguments ni ses clés). */
 export interface McpServer {
   name: string;
@@ -196,6 +199,8 @@ export type ClientMsg =
   | { t: 'read'; missionId: string; file: string; version?: string }
   | { t: 'versions'; missionId: string; file: string }
   | { t: 'team_history' }
+  /** cherche dans l'historique des missions */
+  | { t: 'search'; q: string }
   | { t: 'replay'; missionId: string }
   | { t: 'settings'; settings: Partial<Settings> }
   /** ouvre la fenêtre de choix de dossier de l'ordinateur, pour choisir le dossier de travail */
@@ -223,6 +228,7 @@ export type ServerMsg =
   | { t: 'file_text'; missionId: string; file: string; text: string; truncated: boolean; version?: string }
   | { t: 'versions'; missionId: string; file: string; list: VersionInfo[] }
   | { t: 'team_history'; entries: TeamEntry[] }
+  | { t: 'search'; q: string; hits: SearchHit[] }
   | { t: 'quota'; quota: Quota }
   | { t: 'settings'; settings: Settings }
   | { t: 'toast'; kind: 'info' | 'error'; text: string }

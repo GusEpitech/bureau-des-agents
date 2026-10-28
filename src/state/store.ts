@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { countStats, emptyStats, setProjectMode } from '../../shared/activity.ts';
 import type {
-  ActKind, ClaudeInfo, ClientMsg, DiffFile, McpServer, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
+  ActKind, ClaudeInfo, ClientMsg, DiffFile, McpServer, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, SearchHit, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo,
 } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { say } from '../audio/voice.ts';
@@ -108,6 +108,8 @@ interface S {
   /** les versions de chaque rendu (clé : mission|fichier) */
   versions: Record<string, VersionInfo[]>;
   teamHistory: TeamEntry[] | null;
+  /** le dernier résultat de la recherche dans l'historique */
+  found: { q: string; hits: SearchHit[] } | null;
   /** chaque version du plan, dans l'ordre (le tableau garde l'historique) */
   planHistory: { at: number; items: PlanItem[] }[];
   music: { playing: boolean; index: number; volume: number };
@@ -217,6 +219,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   modal: null,
   versions: {},
   teamHistory: null,
+  found: null,
   planHistory: [],
   music: { playing: false, index: 0, volume: 0.55 },
   voiceOn: pref('voice', true),
@@ -299,6 +302,9 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         break;
       case 'versions':
         set({ versions: { ...s.versions, [`${m.missionId}|${m.file}`]: m.list } });
+        break;
+      case 'search':
+        set({ found: { q: m.q, hits: m.hits } });
         break;
       case 'team_history':
         set({ teamHistory: m.entries });
