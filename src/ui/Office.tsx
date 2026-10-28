@@ -322,7 +322,7 @@ function Bubble({ id, v }: { id: string; v: View }) {
     else bubbleEls.delete(id);
   }, [id]);
   return (
-    <div className={`bubble-anchor ${id === 'chef' ? 'is-chef' : ''}`} ref={ref} style={{ ['--c' as string]: v.color }}>
+    <div className={`bubble-anchor ${id === 'chef' ? 'is-chef' : ''} ${v.mode === 'ask' ? 'on-top' : v.mode === 'full' ? 'above' : ''}`} ref={ref} style={{ ['--c' as string]: v.color }}>
       {v.mode === 'ask' && v.ask ? <AskBubble ask={v.ask} name={v.name} />
         : v.mode === 'full' ? (
           <div className="bubble">

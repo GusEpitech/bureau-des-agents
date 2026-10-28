@@ -175,7 +175,7 @@ export type ClientMsg =
   /** `force` : coupe Claude Code et ses commandes, même s'il ne répond plus */
   | { t: 'stop'; force?: boolean }
   /** répondre à une demande de permission ; `message` accompagne un refus (par exemple tes remarques sur le plan de Max) */
-  | { t: 'answer'; requestId: string; allow: boolean; message?: string }
+  | { t: 'answer'; requestId: string; allow: boolean; message?: string; branch?: string }
   | { t: 'new' }
   | { t: 'open'; missionId: string; file?: string }
   /** ouvre le dossier du bureau (ou son règlement) */

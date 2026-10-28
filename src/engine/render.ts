@@ -9,7 +9,7 @@ import { g2d, makeCanvas, P, rgba, rng, type G } from './pixels.ts';
 import { ANCHOR_X, ANCHOR_Y, robotSprite } from './robots.ts';
 import { drawRoom, neon, signs, type TimeOfDay } from './room.ts';
 import { isProjectMode, ROLES } from '../../shared/activity.ts';
-import { smokeTip, type Actor, type World } from './world.ts';
+import { smokeDrag, smokeTip, type Actor, type World } from './world.ts';
 
 interface Placed { f: Furn; c: HTMLCanvasElement; x: number; y: number; sortY: number }
 
@@ -119,13 +119,23 @@ export class Renderer {
     const sprite = robotSprite(a.role, a.pose, seated ? 'down' : a.dir, a.frame, a.eyes);
     g.drawImage(sprite, x - ANCHOR_X, y - ANCHOR_Y);
     if (a.smokeUntil > world.time && !a.moving) {
-      // la cigarette (un petit trait blanc, le bout qui rougeoie)
-      const tip = smokeTip(a);
+      // la cigarette : un contour sombre (sinon elle disparaît sur les robots clairs), le bout qui rougeoit
+      const tip = smokeTip(a, world.time);
       const left = a.dir === 'left';
-      g.fillStyle = '#f4f0ea';
+      const sx = left ? tip.x : tip.x - 3;
+      const drag = smokeDrag(a, world.time);
+      g.fillStyle = 'rgba(20,14,34,0.9)';
+      g.fillRect(sx - 1, tip.y - 1, 5, 3);
+      g.fillStyle = '#fffaf0';
       g.fillRect(left ? tip.x + 1 : tip.x - 3, tip.y, 3, 1);
-      g.fillStyle = Math.floor(world.time * 2) % 2 ? P.orange : '#ff5a2a';
+      g.fillStyle = drag > 0.5 ? '#ffd23a' : Math.floor(world.time * 3) % 2 ? P.orange : '#ff4a1a';
       g.fillRect(tip.x, tip.y, 1, 1);
+      if (drag > 0.5) {
+        g.fillStyle = 'rgba(255,120,40,0.45)';
+        g.fillRect(tip.x - 1, tip.y - 1, 3, 3);
+        g.fillStyle = '#ffd23a';
+        g.fillRect(tip.x, tip.y, 1, 1);
+      }
     }
     g.globalAlpha = 1;
   }

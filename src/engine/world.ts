@@ -50,6 +50,7 @@ export class Actor {
   happyUntil = 0;
   /** la cigarette : jusqu'à quand il fume (pause clope) */
   smokeUntil = 0;
+  nextPuff = 0;
   // ── l'équipe qui vit au bureau : elle se balade en attendant, et prend un bureau quand Max l'appelle ──
   /** vrai pour un membre de l'équipe résidente */
   res = false;
@@ -92,16 +93,31 @@ export class Actor {
   get busy() { return !!this.cur || this.tasks.length > 0; }
 }
 
-/** Le bout de la cigarette d'un robot : dans sa main, du côté où il regarde. */
-export function smokeTip(a: Actor): Pt {
-  const dx = a.dir === 'left' ? -8 : a.dir === 'right' ? 8 : 5;
-  return { x: Math.round(a.x) + dx, y: Math.round(a.y) - 11 };
+/** Où en est la bouffée : 0 à 1 sur 4 s. Au-delà de 0,62 la main monte à la bouche, la fumée sort à 0,8. */
+export function smokePhase(a: Actor, time: number): number {
+  return ((time + a.smokeUntil) % 4) / 4;
 }
+
+/** La main monte vers la bouche pendant la bouffée (0 = au repos, 1 = à la bouche). */
+export function smokeDrag(a: Actor, time: number): number {
+  const p = smokePhase(a, time);
+  return p < 0.62 ? 0 : p < 0.72 ? (p - 0.62) / 0.1 : p < 0.82 ? 1 : p < 0.9 ? 1 - (p - 0.82) / 0.08 : 0;
+}
+
+/** Le bout de la cigarette d'un robot : dans sa main, du côté où il regarde (plus haut, près de la bouche, pendant la bouffée). */
+export function smokeTip(a: Actor, time = 0): Pt {
+  const k = smokeDrag(a, time);
+  const dx = a.dir === 'left' ? -8 : a.dir === 'right' ? 8 : 5;
+  return { x: Math.round(a.x) + Math.round(dx * (1 - 0.3 * k)), y: Math.round(a.y) - 11 - Math.round(3 * k) };
+}
+
+const MAX_RESIDENTS = 10;
 
 export class World {
   actors = new Map<string, Actor>();
   fx = new Fx();
   grid = walkGrid();
+  private extraId = 0;
   private seatOf = new Map<string, string>();
   private deliverTaken = new Set<number>();
   time = 0;
@@ -132,7 +148,6 @@ export class World {
   private noteAt = 0;
   private steamAt = 0;
   private waveAt = 6;
-  private puffAt = 0;
   /** l'équipe résidente (elle se balade quand elle n'a pas de mission) */
   private residents = new Set<Actor>();
   private demoOn = false;
@@ -229,6 +244,22 @@ export class World {
     const f = tileFeet(tiles[Math.floor(Math.random() * tiles.length)]);
     a.x = f.x;
     a.y = f.y;
+  }
+
+  /**
+   * Son travail est fini. Il ne quitte pas le bureau : il reprend sa vie de bureau (café, clope, discussion…).
+   * Un renfort arrivé par la porte reste donc dans l'équipe résidente, jusqu'à MAX_RESIDENTS ; au-delà, il repart.
+   */
+  private retire(a: Actor, live: boolean) {
+    if (!a.res) {
+      if (this.demoOn || this.residents.size >= MAX_RESIDENTS) { if (live) this.exit(a); else this.remove(a); return; }
+      a.res = true;
+      a.onMission = true; // jusqu'à ce qu'il ait fini de rendre son travail
+      a.homeId = `res-x${++this.extraId}`;
+      a.resName = a.name;
+      this.residents.add(a);
+    }
+    this.release(a, live);
   }
 
   /** Ce que fait quelqu'un de libre : un café, un coup d'œil dehors, une discussion, une clope, un tour… */
@@ -497,10 +528,10 @@ export class World {
         const a = this.actors.get(ev.who);
         if (!a || a.left) break;
         a.left = true;
-        if (!live) { if (a.res) this.release(a, false); else this.remove(a); break; }
+        if (!live) { this.retire(a, false); break; }
         if (ev.ok && !a.reported) { a.reported = true; this.deliver(a); }
         if (!ev.ok) a.sadUntil = this.time + 2;
-        if (a.res) this.release(a, true); else this.exit(a);
+        this.retire(a, true);
         break;
       }
       case 'file':
@@ -522,9 +553,9 @@ export class World {
         this.missionActive = false;
         for (const a of [...this.actors.values()]) {
           if (a === chef || a.left) continue;
-          if (a.res) { if (a.onMission) { a.left = true; this.release(a, live); } continue; }
+          if (a.res && !a.onMission) continue;
           a.left = true;
-          if (live) this.exit(a); else this.remove(a);
+          this.retire(a, live);
         }
         if (live) {
           if (ev.ok) { this.fx.rain(22 * T); chef.happyUntil = this.time + 3; }
@@ -648,9 +679,13 @@ export class World {
     for (const a of this.actors.values()) {
       if (a.smokeUntil <= this.time) continue;
       moving = true;
-      if (!a.moving && this.time > this.puffAt) {
-        this.puffAt = this.time + 0.45;
-        const e = smokeTip(a);
+      if (a.moving) continue;
+      const p = smokePhase(a, this.time);
+      const was = smokePhase(a, this.time - dt);
+      const e = smokeTip(a, this.time);
+      if (was < 0.8 && p >= 0.8) for (let i = 0; i < 5; i++) this.fx.smoke(e.x + (a.dir === 'left' ? -1 : 1), e.y - 2 - i % 2);
+      else if (this.time > a.nextPuff) {
+        a.nextPuff = this.time + 0.5;
         this.fx.smoke(e.x, e.y - 1);
       }
     }

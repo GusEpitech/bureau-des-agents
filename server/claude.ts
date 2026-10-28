@@ -141,7 +141,7 @@ export class ClaudeProcess {
       type: 'control_response',
       response: {
         subtype: 'success', request_id: requestId,
-        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: message || 'Le patron a dit non. Trouve une autre façon de faire, ou demande-lui.' },
+        response: allow ? { behavior: 'allow', updatedInput: input ?? {} } : { behavior: 'deny', message: message || 'Gus a dit non. Trouve une autre façon de faire, ou demande-lui.' },
       },
     });
   }

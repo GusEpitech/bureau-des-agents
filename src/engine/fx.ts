@@ -145,8 +145,11 @@ export class Fx {
           g.fillRect(x - 1, y + 1, 2, 1);
           break;
         case 'smoke':
-          g.fillStyle = `rgba(207,202,216,${0.55 * (1 - t)})`;
-          g.fillRect(x, y, t > 0.5 ? 2 : 1, t > 0.5 ? 2 : 1);
+          // un voile sombre dessous : la fumée se voit aussi devant un robot clair
+          g.fillStyle = `rgba(30,24,50,${0.3 * (1 - t)})`;
+          g.fillRect(x - 1, y - 1, t > 0.4 ? 4 : 3, t > 0.4 ? 4 : 3);
+          g.fillStyle = `rgba(240,238,248,${0.85 * (1 - t)})`;
+          g.fillRect(x, y, t > 0.4 ? 2 : 1, t > 0.4 ? 2 : 1);
           break;
         case 'steam':
           g.fillStyle = `rgba(255,255,255,${0.35 * (1 - t)})`;
