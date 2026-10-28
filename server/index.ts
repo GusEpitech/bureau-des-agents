@@ -14,7 +14,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { ClientMsg, ServerMsg } from '../shared/protocol.ts';
+import type { ClientMsg, RepoReq, ServerMsg } from '../shared/protocol.ts';
 import { Bureau } from './bureau.ts';
 import { findClaude } from './claude.ts';
 
@@ -207,6 +207,19 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
     case 'stats': {
       const days = Math.max(0, Math.min(3650, Math.round(Number(m.days) || 0)));
       send({ t: 'stats', stats: bureau.stats(days) });
+      break;
+    }
+    case 'repo': {
+      // seulement ce que git comprend : chaque champ est vérifié (types, longueurs) ici, puis encore dans repo.ts
+      const op = str(m.op, 20) as RepoReq['op'];
+      const strs = (v: unknown) => (Array.isArray(v) ? v.slice(0, 500).map((x) => str(x, 1000)) : undefined);
+      send(await bureau.repo({
+        op, ref: m.ref === undefined ? undefined : str(m.ref, 200), all: m.all === true, skip: Number(m.skip) || 0, hash: m.hash === undefined ? undefined : str(m.hash, 40),
+        path: m.path === undefined ? undefined : str(m.path, 1000), paths: strs(m.paths), staged: m.staged === true,
+        branch: m.branch === undefined ? undefined : str(m.branch, 200), remote: m.remote === true, name: m.name === undefined ? undefined : str(m.name, 200),
+        from: m.from === undefined ? undefined : str(m.from, 200), force: m.force === true, message: m.message === undefined ? undefined : str(m.message, 10_000),
+        all_changes: m.all_changes === true, pop: m.pop === true, mode: m.mode === 'merge' || m.mode === 'rebase' ? m.mode : undefined,
+      }));
       break;
     }
     case 'week':

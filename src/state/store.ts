@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { countStats, emptyStats, setProjectMode } from '../../shared/activity.ts';
 import type {
-  ActKind, AgentUse, ClaudeInfo, ClientMsg, DiffFile, McpServer, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, SearchHit, ServerMsg, Settings, Stats, TeamEntry, TurnUsage, VersionInfo,
+  ActKind, AgentUse, ClaudeInfo, RepoBranch, RepoChange, RepoCommit, RepoOp, RepoOverview, ClientMsg, DiffFile, McpServer, FileInfo, GitAction, GitStatus, MissionInfo, MissionStats, OfficeEvent, PlanItem, Quota, Role, SearchHit, ServerMsg, Settings, Stats, TeamEntry, TurnUsage, VersionInfo,
 } from '../../shared/protocol.ts';
 import { sfx } from '../audio/sfx.ts';
 import { say } from '../audio/voice.ts';
@@ -150,6 +150,10 @@ interface S {
   gitBusy: GitAction | null;
   /** le résultat de la dernière action git */
   gitResult: { action: GitAction; ok: boolean; text: string; url?: string } | null;
+  /** le mode Git : le dépôt du dossier de travail (branches, historique, changements) */
+  repo: RepoState;
+  /** la vue ouverte dans l'onglet Git */
+  gitView: GitView;
   send: (m: ClientMsg) => void;
   receive: (m: ServerMsg) => void;
   apply: (ev: OfficeEvent, at: number, live: boolean) => void;
@@ -163,6 +167,26 @@ const pref = <T,>(key: string, fallback: T): T => {
 /** Vrai si l'utilisateur a déjà réglé cette préférence lui-même. */
 export const hasPref = (key: string) => { try { return localStorage.getItem('bureau:' + key) !== null; } catch { return false; } };
 export const savePref = (key: string, v: unknown) => { try { localStorage.setItem('bureau:' + key, JSON.stringify(v)); } catch { /* navigation privée */ } };
+
+export type GitView = 'changes' | 'history' | 'branches' | 'mission';
+
+/** Ce que le navigateur sait du dépôt : chaque liste arrive quand la vue qui la montre la demande. */
+export interface RepoState {
+  overview: RepoOverview | null;
+  branches: RepoBranch[] | null;
+  commits: RepoCommit[] | null;
+  more: boolean;
+  changes: RepoChange[] | null;
+  /** le détail d'un commit ouvert */
+  shown: { hash: string; body: string; files: DiffFile[] } | null;
+  /** le diff de chaque fichier ouvert (clé : « s:chemin » prêt à commiter, « w:chemin » dans le dossier) */
+  diffs: Record<string, DiffFile[]>;
+  busy: RepoOp | null;
+  result: { op: RepoOp; ok: boolean; text: string; at: number } | null;
+}
+const emptyRepo = (): RepoState => ({ overview: null, branches: null, commits: null, more: false, changes: null, shown: null, diffs: {}, busy: null, result: null });
+/** Ce qui modifie le dépôt (le reste ne fait que lire). */
+const REPO_WRITES: RepoOp[] = ['fetch', 'pull', 'push', 'checkout', 'new_branch', 'delete_branch', 'merge', 'merge_abort', 'stage', 'unstage', 'discard', 'commit', 'stash'];
 
 const emptyChef = (): ChefView => ({ say: '', sayAt: 0, typing: '', thinkingAt: 0, act: null, acts: [] });
 
@@ -248,6 +272,8 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   git: null,
   gitBusy: null,
   gitResult: null,
+  repo: emptyRepo(),
+  gitView: 'changes',
   send: () => {},
 
   toast: (kind, text) => {
@@ -325,7 +351,8 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         set({ quota: m.quota });
         break;
       case 'settings':
-        set({ settings: m.settings });
+        // un autre dossier de travail : ce qu'on savait de l'ancien dépôt ne vaut plus
+        set({ settings: m.settings, ...(m.settings.workdir !== s.settings.workdir ? { repo: emptyRepo() } : {}) });
         break;
       case 'toast':
         get().toast(m.kind, m.text);
@@ -333,6 +360,19 @@ export const useOffice = create<S>((rawSet, rawGet) => {
       case 'replay':
         // géré par le lecteur (net/replay.ts)
         break;
+      case 'repo': {
+        const r = s.repo;
+        const next: RepoState = { ...r, overview: m.overview ?? r.overview, busy: null };
+        if (m.op === 'branches' && m.ok) next.branches = m.branches ?? [];
+        else if (m.op === 'changes' && m.ok) { next.changes = m.changes ?? []; next.diffs = {}; }
+        else if (m.op === 'log' && m.ok) { next.commits = m.skip ? [...(r.commits ?? []), ...(m.commits ?? [])] : m.commits ?? []; next.more = !!m.more; }
+        else if (m.op === 'show' && m.ok && m.hash) next.shown = { hash: m.hash, body: m.body ?? '', files: m.files ?? [] };
+        else if (m.op === 'diff' && m.ok && m.path) next.diffs = { ...r.diffs, [`${m.staged ? 's' : 'w'}:${m.path}`]: m.files ?? [] };
+        if (REPO_WRITES.includes(m.op) || !m.ok) next.result = { op: m.op, ok: m.ok, text: m.text ?? '', at: Date.now() };
+        set({ repo: next });
+        if (REPO_WRITES.includes(m.op) && m.ok && m.op !== 'stage' && m.op !== 'unstage') sfx('check');
+        break;
+      }
       case 'diff':
         if (s.mission?.id !== m.missionId) break;
         set({ diff: { ok: m.ok, text: m.text, note: m.note, files: m.files, truncated: m.truncated, at: Date.now() }, diffLoading: false });

@@ -16,7 +16,7 @@ export const YARD_BOTTOM = 21;
 
 export type FurnKind =
   | 'desk' | 'chefDesk' | 'chair' | 'chefChair' | 'plantBig' | 'plantTall' | 'plantSmall' | 'rack' | 'printer'
-  | 'cooler' | 'coffee' | 'sofa' | 'tableLow' | 'shelf' | 'lamp' | 'easel' | 'bin' | 'jukebox' | 'bench' | 'tree' | 'ashtray';
+  | 'cooler' | 'coffee' | 'sofa' | 'tableLow' | 'shelf' | 'lamp' | 'easel' | 'bin' | 'jukebox' | 'bench' | 'tree' | 'ashtray' | 'picnic' | 'flowerbed' | 'bbq';
 
 export interface Furn {
   id: string;
@@ -111,6 +111,10 @@ furn.push({ id: 'tree-br', kind: 'tree', tx: 14, ty: 21, w: 1, h: 1, seed: 16 })
 furn.push({ id: 'plant-yard', kind: 'plantBig', tx: 8, ty: 17, w: 1, h: 1, seed: 25 });
 furn.push({ id: 'lamp-yard-l', kind: 'lamp', tx: 8, ty: 19, w: 1, h: 1 });
 furn.push({ id: 'lamp-yard-r', kind: 'lamp', tx: 13, ty: 19, w: 1, h: 1 });
+furn.push({ id: 'picnic', kind: 'picnic', tx: 5, ty: 19, w: 2, h: 1 });
+furn.push({ id: 'flowers-l', kind: 'flowerbed', tx: 5, ty: 16, w: 2, h: 1, seed: 3 });
+furn.push({ id: 'flowers-r', kind: 'flowerbed', tx: 15, ty: 17, w: 2, h: 1, seed: 9 });
+furn.push({ id: 'bbq', kind: 'bbq', tx: 19, ty: 16, w: 1, h: 1 });
 
 export const FURNITURE = furn;
 export const SEATS = seats;

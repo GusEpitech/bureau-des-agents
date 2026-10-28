@@ -12,6 +12,13 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - La conversation, l'onglet Diff, les actions git (commiter, pousser) et la liste des connecteurs MCP.
 - Le mode rapide, pour les petites tâches : Max fait tout seul, sans sous-agents ni plan.
 
+**Mode Git**
+- L'onglet « Diff » devient « Git » et marche comme dans un IDE, même sans mission : tes changements (prêts à commiter, modifiés, avec leur diff), le commit, la mise de côté (stash).
+- L'historique des commits avec son graphe de branches, les étiquettes (branches, tags), le détail d'un commit et ses fichiers.
+- Les branches : changer, créer, fusionner, supprimer, récupérer celles de `origin`.
+- Fetch, pull (avance rapide, fusion ou rebase quand les deux côtés ont avancé) et push, avec l'état du remote (↑ ↓), les conflits et l'annulation d'une fusion.
+- Le diff de la mission est toujours là, dans la vue « Mission ».
+
 **Économiser des tokens**
 - Les skills sont coupés par défaut dans les missions, les connecteurs MCP se choisissent projet par projet, et l'effort se règle par métier.
 - Une jauge montre la taille du contexte de Max, et la fenêtre de l'équipe montre la part de chaque métier.
@@ -30,6 +37,7 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - Le chat vient voir ceux qui dorment, et s'endort sur le clavier de Max quand il est absent.
 - Les bulles passent devant le nom des robots qui sont derrière.
 - Une vraie ambiance lumineuse, surtout la nuit : rayons de lune (ou de soleil couchant) qui traversent les fenêtres avec l'ombre des montants, poussière qui flotte dedans, flaques de lumière sur le parquet autour des lampes, lueur colorée des écrans sur les bureaux, traînée du néon, coins plus sombres.
+- La cour s'équipe : table de pique-nique avec parasol, massifs de fleurs, barbecue. Et Loula rejoint l'exploration.
 - Des textures plus détaillées : veines, nœuds et clous du parquet, passages usés, tapis avec franges et motifs, papier peint et boiseries, murs en briques, dalles fissurées et mousse dans la cour, fleurs dans l'herbe.
 
 **L'interface**

@@ -4,10 +4,10 @@
 import { execFile } from 'node:child_process';
 import type { DiffFile, GitStatus, MissionInfo } from '../shared/protocol.ts';
 
-interface Run { code: number; out: string; err: string }
+export interface Run { code: number; out: string; err: string }
 
 /** Lance un programme et rend sa sortie, sans jamais lever d'erreur (le code de sortie dit si ça a marché). */
-function run(bin: string, args: string[], cwd: string, timeout = 30_000): Promise<Run> {
+export function run(bin: string, args: string[], cwd: string, timeout = 30_000): Promise<Run> {
   return new Promise((resolve) => {
     execFile(bin, args, {
       cwd, timeout, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8',
@@ -21,13 +21,13 @@ function run(bin: string, args: string[], cwd: string, timeout = 30_000): Promis
   });
 }
 
-const git = (cwd: string, args: string[], timeout?: number) => run('git', ['-c', 'core.quotePath=false', '-c', 'color.ui=false', ...args], cwd, timeout);
+export const git = (cwd: string, args: string[], timeout?: number) => run('git', ['-c', 'core.quotePath=false', '-c', 'color.ui=false', ...args], cwd, timeout);
 
 /** La dernière ligne utile d'une erreur git (« fatal: … »). */
-const why = (r: Run) => (r.err || r.out).trim().split('\n').filter(Boolean).slice(-2).join(' ') || `code ${r.code}`;
+export const why = (r: Run) => (r.err || r.out).trim().split('\n').filter((l) => l && !/^\s*hint:/i.test(l)).slice(-2).join(' ') || `code ${r.code}`;
 
 let ghFound: boolean | null = null;
-async function hasGh(cwd: string) {
+export async function hasGh(cwd: string) {
   if (ghFound === null) ghFound = (await run('gh', ['--version'], cwd, 5000)).code === 0;
   return ghFound;
 }
@@ -80,7 +80,7 @@ export function parseDiff(raw: string): DiffFile[] {
 }
 
 /** Le dossier est-il un dépôt git ? */
-async function isRepo(folder: string) {
+export async function isRepo(folder: string) {
   const r = await git(folder, ['rev-parse', '--is-inside-work-tree']);
   return r.code === 0 && r.out.trim() === 'true';
 }

@@ -10,7 +10,7 @@ import { pendingPlanOf, projectModeOf, savePref, teamList, techOf, useOffice, ty
 import { techLabel } from './tech.ts';
 import { PromptBox, TechActs } from './Tech.tsx';
 import { ChatSection } from './Chat.tsx';
-import { DiffSection } from './Diff.tsx';
+import { GitSection } from './Git.tsx';
 import { EXAMPLES } from './Dialog.tsx';
 import { fmtDate, fmtDuration, tilde } from './format.ts';
 import { mdToHtml } from './md.ts';
@@ -30,9 +30,9 @@ export function Avatar({ role, size = 32 }: { role: Role; size?: number }) {
 
 const STATUS: Record<AgentView['status'], string> = { working: 'Au travail', reporting: 'Rend son rapport', done: 'A rendu son travail', failed: 'N’a pas pu finir' };
 
-type Tab = 'chat' | 'mission' | 'diff';
+type Tab = 'chat' | 'mission' | 'git';
 const readTab = (): Tab => {
-  try { const v = localStorage.getItem('bureau:panelTab'); return v === '"mission"' ? 'mission' : v === '"diff"' ? 'diff' : 'chat'; } catch { return 'chat'; }
+  try { const v = localStorage.getItem('bureau:panelTab'); return v === '"mission"' ? 'mission' : v === '"diff"' || v === '"git"' ? 'git' : 'chat'; } catch { return 'chat'; }
 };
 
 export function Panel() {
@@ -42,15 +42,17 @@ export function Panel() {
   const project = useOffice(projectModeOf);
   const [picked, setTab] = useState(readTab);
   // l'onglet « Diff » n'existe qu'en mode projet
-  const tab: Tab = picked === 'diff' && !project ? 'chat' : picked;
+  const tab: Tab = picked === 'git' && !project ? 'chat' : picked;
   const pick = (t: Tab) => { setTab(t); savePref('panelTab', t); };
   // un plan de Max à valider : on ramène la conversation, c'est là qu'il se valide
   const planId = useOffice((s) => pendingPlanOf(s)?.requestId);
   useEffect(() => { if (planId) setTab('chat'); }, [planId]);
-  // Alt+1, Alt+2, Alt+3 (App.tsx) : les onglets dans l'ordre (le Diff seulement en mode projet)
+  // Alt+1, Alt+2, Alt+3 (App.tsx) : les onglets dans l'ordre (Git seulement en mode projet ; sans mission : l'accueil, puis Git)
   useEffect(() => {
     const onTab = (e: Event) => {
-      const tabs: Tab[] = useOffice.getState().mission?.project ? ['chat', 'mission', 'diff'] : ['chat', 'mission'];
+      const st = useOffice.getState();
+      const project = projectModeOf(st);
+      const tabs: Tab[] = st.mission ? (project ? ['chat', 'mission', 'git'] : ['chat', 'mission']) : project ? ['chat', 'git'] : ['chat'];
       const t = tabs[(e as CustomEvent<number>).detail];
       if (t) pick(t);
     };
@@ -59,25 +61,29 @@ export function Panel() {
   }, []);
   return (
     <aside className={`panel ${mission && tab === 'chat' ? 'chatting' : ''}`}>
-      {mission ? (
-        <>
-          <div className="panel-tabs">
-            <div className="seg">
-              <button className={tab === 'chat' ? 'on' : ''} onClick={() => pick('chat')}>💬 Conversation</button>
-              <button className={tab === 'mission' ? 'on' : ''} onClick={() => pick('mission')}>📋 La mission</button>
-              {project && <button className={tab === 'diff' ? 'on' : ''} onClick={() => pick('diff')}>🔀 Diff</button>}
-            </div>
-            {final && !busy && <button className="btn small ghost" title="Le récap de Max et les fichiers" onClick={() => { sfx('open'); useOffice.setState({ showFinal: true }); }}>Récap</button>}
+      {(mission || project) && (
+        <div className="panel-tabs">
+          <div className="seg">
+            {mission ? (
+              <>
+                <button className={tab === 'chat' ? 'on' : ''} onClick={() => pick('chat')}>💬 Conversation</button>
+                <button className={tab === 'mission' ? 'on' : ''} onClick={() => pick('mission')}>📋 La mission</button>
+              </>
+            ) : <button className={tab !== 'git' ? 'on' : ''} onClick={() => pick('chat')}>🏠 Accueil</button>}
+            {project && <button className={tab === 'git' ? 'on' : ''} onClick={() => pick('git')}>🔀 Git</button>}
           </div>
-          {tab === 'chat' ? <ChatSection /> : tab === 'diff' ? <DiffSection /> : (
-            <>
-              <PlanSection />
-              <TeamSection />
-              <FilesSection />
-              <FeedSection />
-            </>
-          )}
-        </>
+          {mission && final && !busy && <button className="btn small ghost" title="Le récap de Max et les fichiers" onClick={() => { sfx('open'); useOffice.setState({ showFinal: true }); }}>Récap</button>}
+        </div>
+      )}
+      {tab === 'git' ? <GitSection /> : mission ? (
+        tab === 'chat' ? <ChatSection /> : (
+          <>
+            <PlanSection />
+            <TeamSection />
+            <FilesSection />
+            <FeedSection />
+          </>
+        )
       ) : <Welcome />}
     </aside>
   );
@@ -115,7 +121,7 @@ function Welcome() {
               <>
                 <li><b>Tu décris la petite tâche</b> en une phrase.</li>
                 <li><b>Max la fait tout seul</b>, sans plan ni équipe, sur une nouvelle branche git.</li>
-                <li><b>Tu relis le diff</b>, puis tu commites et tu pousses depuis l’onglet Diff.</li>
+                <li><b>Tu relis le diff</b>, puis tu commites et tu pousses depuis l’onglet Git.</li>
               </>
             ) : (
               <>
@@ -288,7 +294,7 @@ function FilesSection() {
       )}
       {files ? <FileList /> : <p className="small muted">{mission?.project ? 'Les fichiers que l’équipe modifie arriveront ici.' : 'Les fichiers de l’équipe arriveront ici (et dans le dossier de la mission).'}</p>}
       <div className="row">
-        {mission?.project && mission.branch && <button className="btn small" onClick={() => { sfx('click'); window.dispatchEvent(new CustomEvent('bureau:tab', { detail: 2 })); }}>🔀 Voir le diff</button>}
+        {mission?.project && mission.branch && <button className="btn small" onClick={() => { sfx('click'); useOffice.setState({ gitView: 'mission' }); window.dispatchEvent(new CustomEvent('bureau:tab', { detail: 2 })); }}>🔀 Voir le diff</button>}
         {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir dans l’éditeur' : 'Ouvrir le dossier de la mission'}</button>}
       </div>
     </section>

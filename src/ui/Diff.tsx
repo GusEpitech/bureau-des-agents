@@ -25,7 +25,7 @@ function useSuggestedMessage() {
   }, [chat, title]);
 }
 
-const Patch = memo(function Patch({ f }: { f: DiffFile }) {
+export const Patch = memo(function Patch({ f }: { f: DiffFile }) {
   if (f.binary) return <p className="small muted diff-empty">Fichier binaire : pas d’aperçu.</p>;
   if (!f.patch) return <p className="small muted diff-empty">{f.truncated ? 'Trop gros pour être affiché ici.' : 'Pas de changement de contenu.'}</p>;
   const lines = f.patch.split('\n');
@@ -40,7 +40,7 @@ const Patch = memo(function Patch({ f }: { f: DiffFile }) {
   );
 });
 
-function FileRow({ f, open, onToggle }: { f: DiffFile; open: boolean; onToggle: () => void }) {
+export function FileRow({ f, open, onToggle }: { f: DiffFile; open: boolean; onToggle: () => void }) {
   const [letter, label] = STATUS[f.status];
   return (
     <div className={`diff-file ${open ? 'open' : ''}`}>
