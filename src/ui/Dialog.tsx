@@ -272,26 +272,34 @@ function FolderPick() {
     else send({ t: 'settings', settings: { workdir: v } });
   };
   const name = (d: string) => d.split('/').filter(Boolean).pop() ?? d;
+  const place = workdir ? name(workdir) : '';
   return (
     <div className="folder-pick">
-      <span>{workdir ? '🛠️ Mode projet :' : '📁 L’équipe travaillera dans'}</span>
-      <select value={workdir} title={workdir ? tilde(workdir) : undefined} onChange={(e) => choose(e.target.value)}>
-        <option value="">un nouveau dossier de mission</option>
-        {recent.length > 0 && (
-          <optgroup label="Mes projets">
-            {recent.map((d) => <option key={d} value={d}>{name(d)} · {tilde(d)}</option>)}
-          </optgroup>
-        )}
-        <option value={'\0pick'}>Choisir un autre dossier…</option>
-      </select>
+      <label className="fp-field">
+        <span>{workdir ? '🛠️ Projet' : '📁 Où ?'}</span>
+        <select value={workdir} title={workdir ? tilde(workdir) : 'Un dossier neuf est créé pour chaque mission'} onChange={(e) => choose(e.target.value)}>
+          <option value="">Un nouveau dossier de mission</option>
+          {recent.length > 0 && (
+            <optgroup label="Mes projets">
+              {recent.map((d) => <option key={d} value={d}>{name(d)}</option>)}
+            </optgroup>
+          )}
+          <option value={'\0pick'}>Choisir un autre dossier…</option>
+        </select>
+      </label>
       {workdir && (
-        <button
-          className={`quick-toggle ${quick ? 'on' : ''}`}
-          title={quick ? 'Mode rapide : Max fait la petite tâche tout seul, sans plan ni équipe. Clique pour revenir au mode complet.' : 'Mode complet : Max fait un plan que tu valides, puis envoie son équipe. Clique pour passer en mode rapide (petites tâches).'}
-          onClick={() => { sfx('click'); send({ t: 'settings', settings: { quick: !quick } }); }}
-        >⚡ Rapide</button>
+        <div className="fp-mode" role="group" aria-label="Comment Max travaille">
+          <div className="seg small">
+            <button className={!quick ? 'on' : ''} aria-pressed={!quick} onClick={() => { if (quick) { sfx('click'); send({ t: 'settings', settings: { quick: false } }); } }}>📋 Complet</button>
+            <button className={quick ? 'on quick' : ''} aria-pressed={quick} onClick={() => { if (!quick) { sfx('click'); send({ t: 'settings', settings: { quick: true } }); } }}>⚡ Rapide</button>
+          </div>
+        </div>
       )}
-      {workdir && <span className="small muted">{quick ? 'Max fait tout seul, sans plan' : 'une branche git par mission'}</span>}
+      <span className="fp-hint">
+        {!workdir ? 'L’équipe travaille dans un dossier neuf, créé pour la mission.'
+          : quick ? `Max fait la petite tâche tout seul dans ${place}, sans plan ni équipe. Sur une branche git.`
+            : `Max fait un plan que tu valides, puis envoie son équipe travailler dans ${place}. Sur une branche git.`}
+      </span>
     </div>
   );
 }

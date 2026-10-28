@@ -55,8 +55,25 @@ function FileRow({ f, open, onToggle }: { f: DiffFile; open: boolean; onToggle: 
   );
 }
 
-/** La barre git : où en est le dépôt, et les actions de la fin. */
-function GitBar() {
+/** Où en est le dépôt, en une ligne : la branche, et ce qu'il reste à faire. */
+function GitState() {
+  const git = useOffice((s) => s.git);
+  if (!git) return <p className="small muted">Je regarde le dépôt…</p>;
+  const st = git.status;
+  if (!st) return <p className="small muted">{git.text ?? 'Pas de dépôt git.'}</p>;
+  const todo = st.dirty ? ['commit', 'À commiter'] : st.branchExists && st.ahead > 0 ? ['push', `${st.ahead} commit${st.ahead > 1 ? 's' : ''} à pousser`] : ['ok', 'À jour'];
+  return (
+    <div className="git-state">
+      <span className="git-branch" title="La branche actuelle du projet">🌿 <code>{st.branch ?? 'HEAD détachée'}</code></span>
+      {st.base && st.branch !== st.base && <span className="muted small">depuis <code>{st.base}</code></span>}
+      <span className={`git-chip ${todo[0]}`}>{todo[1]}</span>
+      {st.missionBranch && !st.onMission && <span className="warn small">pas sur la branche de la mission</span>}
+    </div>
+  );
+}
+
+/** Le bas du diff : la prochaine étape (commiter, puis pousser), et les autres actions en discret. */
+function GitDock() {
   const mission = useOffice((s) => s.mission);
   const git = useOffice((s) => s.git);
   const busy = useOffice((s) => s.gitBusy);
@@ -78,60 +95,58 @@ function GitBar() {
   // après un commit réussi, la zone repart de la prochaine proposition
   useEffect(() => { if (result?.ok && result.action === 'commit') edited.current = false; }, [result]);
 
-  if (!mission) return null;
   const st = git?.status;
+  if (!mission || !st) return null;
   const act = (action: GitAction, message?: string) => {
     sfx('click');
     useOffice.setState({ gitBusy: action, gitResult: null });
     send({ t: 'git', missionId: mission.id, action, message });
   };
-  if (!git) return <div className="git-bar"><p className="small muted">Je regarde le dépôt…</p></div>;
-  if (!st) return <div className="git-bar"><p className="small muted">{git.text ?? 'Pas de dépôt git.'}</p></div>;
   const locked = !!busy || working;
+  const canPush = st.branchExists && st.ahead > 0 && st.remote;
+  // une seule action mise en avant : commiter d'abord, pousser ensuite
+  const next: 'commit' | 'push' | null = st.onMission && st.dirty ? 'commit' : canPush ? 'push' : null;
+  const more = (st.base && st.branch !== st.base) || (st.branchExists && !st.onMission);
 
   return (
-    <div className="git-bar">
-      <div className="git-state small">
-        <span title="La branche actuelle du projet">🌿 <code>{st.branch ?? 'HEAD détachée'}</code></span>
-        {st.missionBranch && !st.onMission && <span className="warn">pas sur la branche de la mission</span>}
-        {st.dirty ? <span className="warn">changements pas commités</span> : <span className="muted">rien à commiter</span>}
-        {st.branchExists && <span className="muted">{st.ahead} commit{st.ahead > 1 ? 's' : ''} d’avance sur <code>{st.base}</code></span>}
-      </div>
-
-      {st.onMission && (
-        <div className="git-commit">
-          <textarea
-            rows={2}
-            value={msg}
-            placeholder="Le message de commit"
-            onChange={(e) => { edited.current = true; setMsg(e.target.value); }}
-          />
-          <button className="btn small primary" disabled={locked || !st.dirty || !msg.trim()} onClick={() => act('commit', msg)}>
-            {busy === 'commit' ? 'Commit…' : 'Commiter'}
-          </button>
+    <div className="git-dock">
+      {st.onMission && (st.dirty || next === 'commit') && (
+        <div className="git-step">
+          <b>1 · Commite</b>
+          <div className="git-commit">
+            <textarea rows={2} value={msg} placeholder="Le message de commit" onChange={(e) => { edited.current = true; setMsg(e.target.value); }} />
+            <button className="btn primary" disabled={locked || !st.dirty || !msg.trim()} onClick={() => act('commit', msg)}>
+              {busy === 'commit' ? 'Commit…' : 'Commiter'}
+            </button>
+          </div>
         </div>
       )}
-
-      <div className="row git-actions">
-        {st.branchExists && (
-          <button className="btn small" disabled={locked || st.ahead === 0 || !st.remote}
+      {st.branchExists && (
+        <div className="git-step">
+          <b>{st.dirty ? '2 · Pousse' : 'Pousse'}</b>
+          <button className={`btn ${next === 'push' ? 'primary' : ''}`} disabled={locked || !canPush}
             title={!st.remote ? 'Pas de remote « origin »' : st.ahead === 0 ? 'Commite d’abord' : st.gh ? 'git push, puis gh pr create' : 'git push (installe gh pour ouvrir la PR toute seule)'}
             onClick={() => act('push')}>
             {busy === 'push' ? 'Envoi…' : st.gh ? 'Pousser et ouvrir une PR' : 'Pousser'}
           </button>
-        )}
-        {st.base && st.branch !== st.base && (
-          <button className="btn small" disabled={locked || st.dirty} title={st.dirty ? 'Commite d’abord tes changements' : `git switch ${st.base}`} onClick={() => act('switch_base')}>
-            {busy === 'switch_base' ? '…' : `Revenir sur ${st.base}`}
-          </button>
-        )}
-        {st.branchExists && !st.onMission && (
-          <button className={`btn small ${confirmDelete ? 'danger' : 'ghost'}`} disabled={locked}
-            onClick={() => { if (confirmDelete) { setConfirmDelete(false); act('delete_branch'); } else { sfx('click'); setConfirmDelete(true); } }}>
-            {busy === 'delete_branch' ? '…' : confirmDelete ? 'Sûr ? Clique encore pour supprimer' : 'Supprimer la branche'}
-          </button>
-        )}
-      </div>
+          {!canPush && <span className="small muted">{!st.remote ? 'Pas de remote « origin ».' : st.dirty ? 'Commite d’abord.' : 'Rien à pousser.'}</span>}
+        </div>
+      )}
+      {more && (
+        <div className="row git-more">
+          {st.base && st.branch !== st.base && (
+            <button className="btn small ghost" disabled={locked || st.dirty} title={st.dirty ? 'Commite d’abord tes changements' : `git switch ${st.base}`} onClick={() => act('switch_base')}>
+              {busy === 'switch_base' ? '…' : `Revenir sur ${st.base}`}
+            </button>
+          )}
+          {st.branchExists && !st.onMission && (
+            <button className={`btn small ${confirmDelete ? 'danger' : 'ghost'}`} disabled={locked}
+              onClick={() => { if (confirmDelete) { setConfirmDelete(false); act('delete_branch'); } else { sfx('click'); setConfirmDelete(true); } }}>
+              {busy === 'delete_branch' ? '…' : confirmDelete ? 'Sûr ? Clique encore pour supprimer' : 'Supprimer la branche'}
+            </button>
+          )}
+        </div>
+      )}
       {working && <p className="small muted">L’équipe travaille : les actions git attendent qu’elle ait fini.</p>}
       {result && (
         <p className={`small git-result ${result.ok ? 'ok' : 'ko'}`}>
@@ -188,7 +203,7 @@ export function DiffSection() {
 
   const body = (
     <section className={`card diff-card ${big ? 'big' : ''}`}>
-      <GitBar />
+      <GitState />
       <div className="diff-head">
         <b>{diff?.ok ? `${files.length} fichier${files.length > 1 ? 's' : ''}` : 'Le diff'}</b>
         {diff?.ok && files.length > 0 && <span className="diff-count"><i className="plus">+{adds}</i> <i className="minus">−{dels}</i></span>}
@@ -205,6 +220,7 @@ export function DiffSection() {
         {files.map((f) => <FileRow key={f.path} f={f} open={open.has(f.path)} onToggle={() => toggle(f.path)} />)}
       </div>
       {diff?.truncated && <p className="small muted">Le diff est très gros : une partie n’est pas affichée ici. Regarde-le avec git.</p>}
+      <GitDock />
     </section>
   );
   return big ? <div className="diff-back" onClick={(e) => { if (e.target === e.currentTarget) setBig(false); }}>{body}</div> : body;

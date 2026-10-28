@@ -183,39 +183,51 @@ export function SettingsPanel() {
       <div className="modal settings" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><b>Réglages du bureau</b><button className="close" onClick={close} aria-label="Fermer">×</button></div>
         <div className="modal-body">
-          <label className="field">
-            <span>Le cerveau de Max (le chef)</span>
-            <select value={settings.chefModel} onChange={(e) => send({ t: 'settings', settings: { chefModel: e.target.value } })}>
-              {CHEF_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span>Le cerveau de l’équipe</span>
-            <select value={settings.teamModel} onChange={(e) => send({ t: 'settings', settings: { teamModel: e.target.value } })}>
-              {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </label>
-          <RoleModels />
-          <BranchField />
-          <div className="field">
-            <span>Les permissions</span>
-            <label className="radio"><input type="radio" checked={settings.permission === 'auto'} onChange={() => send({ t: 'settings', settings: { permission: 'auto' } })} /> L’équipe décide seule, et lève la main pour les gestes risqués</label>
-            <label className="radio"><input type="radio" checked={settings.permission === 'ask'} onChange={() => send({ t: 'settings', settings: { permission: 'ask' } })} /> Elle demande avant chaque commande</label>
-          </div>
-          <div className="field">
-            <span>L’affichage</span>
-            <label className="radio"><input type="checkbox" checked={dense} onChange={(e) => { useOffice.setState({ dense: e.target.checked }); savePref('dense', e.target.checked); }} /> Vue développeur : la conversation en grand, le bureau en petit, une interface plus dense (sans son par défaut)</label>
-          </div>
-          <div className="field">
-            <span>Le spectacle</span>
-            <label className="radio"><input type="checkbox" checked={voiceOn} onChange={(e) => { useOffice.setState({ voiceOn: e.target.checked }); savePref('voice', e.target.checked); applySound(useOffice.getState().sound); }} /> La voix de Max (« C’est parti ! », « Mission accomplie ! », la visite guidée)</label>
-            <label className="radio"><input type="checkbox" checked={tech} onChange={(e) => { useOffice.setState({ tech: e.target.checked }); savePref('tech', e.target.checked); }} /> Le mode technique : les vraies commandes, leurs sorties, les prompts et les tokens (X)</label>
-            <label className="radio"><input type="checkbox" checked={cameraAuto} onChange={(e) => { useOffice.setState({ cameraAuto: e.target.checked }); savePref('cameraAuto', e.target.checked); }} /> En mode tournage, la caméra suit l’action toute seule</label>
-          </div>
-          <p className="small muted">Les réglages comptent pour la prochaine mission. L’équipe ne travaille que dans le dossier de la mission (un nouveau dossier, ou celui que tu choisis sous la zone de saisie), et ne lance jamais rien hors du bureau sans te demander. En mode projet, elle suit ta config Claude Code (tes réglages, tes MCP, tes skills, tes agents), et Max te soumet toujours son plan avant de coder.</p>
-          {claude?.found && <p className="small muted">Claude Code {claude.version} · {tilde(dir)}</p>}
+          <section className="set-group">
+            <h3>Les cerveaux</h3>
+            <p className="set-help">Un modèle rapide suffit pour la plupart des missions. Le changement compte à la prochaine mission.</p>
+            <label className="field">
+              <span>Max, le chef</span>
+              <select value={settings.chefModel} onChange={(e) => send({ t: 'settings', settings: { chefModel: e.target.value } })}>
+                {CHEF_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span>L’équipe</span>
+              <select value={settings.teamModel} onChange={(e) => send({ t: 'settings', settings: { teamModel: e.target.value } })}>
+                {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            <RoleModels />
+          </section>
+
+          <section className="set-group">
+            <h3>Le travail dans un projet</h3>
+            <p className="set-help">Quand tu choisis un dossier sous la zone de saisie, l’équipe suit ta config Claude Code (réglages, MCP, skills, agents). En mode complet, Max te soumet son plan avant de coder ; en mode rapide, il fait la petite tâche tout seul.</p>
+            <BranchField />
+            <div className="field">
+              <span>Les permissions</span>
+              <label className="radio"><input type="radio" checked={settings.permission === 'auto'} onChange={() => send({ t: 'settings', settings: { permission: 'auto' } })} /> L’équipe décide seule, et lève la main pour les gestes risqués</label>
+              <label className="radio"><input type="radio" checked={settings.permission === 'ask'} onChange={() => send({ t: 'settings', settings: { permission: 'ask' } })} /> Elle demande avant chaque commande</label>
+            </div>
+          </section>
+
+          <section className="set-group">
+            <h3>L’affichage</h3>
+            <label className="radio"><input type="checkbox" checked={dense} onChange={(e) => { useOffice.setState({ dense: e.target.checked }); savePref('dense', e.target.checked); }} /> <span><b>Vue développeur</b> : la conversation en grand, le bureau en petit, sans son par défaut (D)</span></label>
+            <label className="radio"><input type="checkbox" checked={tech} onChange={(e) => { useOffice.setState({ tech: e.target.checked }); savePref('tech', e.target.checked); }} /> <span><b>Mode technique</b> : les vraies commandes, leurs sorties, les prompts et les tokens (X)</span></label>
+          </section>
+
+          <section className="set-group">
+            <h3>Le spectacle</h3>
+            <label className="radio"><input type="checkbox" checked={voiceOn} onChange={(e) => { useOffice.setState({ voiceOn: e.target.checked }); savePref('voice', e.target.checked); applySound(useOffice.getState().sound); }} /> <span><b>La voix de Max</b> : « C’est parti ! », « Mission accomplie ! », la visite guidée</span></label>
+            <label className="radio"><input type="checkbox" checked={cameraAuto} onChange={(e) => { useOffice.setState({ cameraAuto: e.target.checked }); savePref('cameraAuto', e.target.checked); }} /> <span><b>Caméra automatique</b> en mode tournage : elle suit l’action toute seule (C)</span></label>
+          </section>
+
+          <p className="small muted">L’équipe ne travaille que dans le dossier de la mission et ne lance jamais rien hors du bureau sans te demander.{claude?.found ? ` Claude Code ${claude.version} · ${tilde(dir)}` : ''}</p>
+          <details className="keys-box">
+            <summary>Raccourcis clavier</summary>
           <div className="keys">
-            <b>Raccourcis</b>
             <span><kbd>V</kbd> cadre vertical (reel)</span>
             <span><kbd>F</kbd> mode tournage</span>
             <span><kbd>C</kbd> caméra auto</span>
@@ -232,6 +244,7 @@ export function SettingsPanel() {
             <span><kbd>Échap</kbd> fermer, sortir du tournage, arrêter l’équipe</span>
             <span>🥚 Il y a un code secret… (pense aux vieux jeux vidéo)</span>
           </div>
+          </details>
         </div>
       </div>
     </div>
@@ -287,8 +300,8 @@ function RoleModels() {
   };
   const team = settings.teamModel === 'inherit' ? 'comme Max' : settings.teamModel;
   return (
-    <div className="field">
-      <span>Un cerveau par métier</span>
+    <details className="field adv" open={Object.keys(settings.roleModels).length > 0}>
+      <summary>Un cerveau par métier <em>(avancé)</em></summary>
       <div className="role-models">
         {MODEL_ROLES.map((r) => (
           <label key={r}>
@@ -300,7 +313,7 @@ function RoleModels() {
           </label>
         ))}
       </div>
-      <small className="muted">Pour la prochaine mission. Haiku va vite et consomme peu : idéal pour explorer. Opus est le plus fin pour le code.</small>
-    </div>
+      <small className="muted">Haiku va vite et consomme peu : idéal pour explorer. Opus est le plus fin pour le code.</small>
+    </details>
   );
 }

@@ -89,9 +89,44 @@ function Welcome() {
   const send = useOffice((s) => s.send);
   const connection = useOffice((s) => s.connection);
   const project = useOffice(projectModeOf);
+  const workdir = useOffice((s) => s.settings.workdir);
+  const quick = useOffice((s) => s.settings.quick);
+  const mine = connection === 'live' && (
+    <section className="card">
+      <h3>Ton bureau</h3>
+      <p className="small muted path">{tilde(dir)}</p>
+      <div className="row">
+        <button className="btn small" onClick={() => send({ t: 'open_root' })}>Ouvrir le dossier</button>
+        <button className="btn small" onClick={() => send({ t: 'open_root', rules: true })}>Le règlement du bureau</button>
+      </div>
+      <p className="small muted">Le règlement, c’est ce que l’équipe doit savoir sur toi : Max le lit avant chaque mission.</p>
+    </section>
+  );
   return (
     <>
-      {/* en mode projet, pas de mode d'emploi ni d'idées de mission : on va droit à la conversation */}
+      {/* en mode projet : le projet d'abord, et comment Max va y travailler */}
+      {project && connection === 'live' && (
+        <section className="card project-card">
+          <h3>Ton projet</h3>
+          <p className="project-name"><b>{workdir.split('/').filter(Boolean).pop()}</b> <span className="small muted path">{tilde(workdir)}</span></p>
+          <ol className="steps">
+            {quick ? (
+              <>
+                <li><b>Tu décris la petite tâche</b> en une phrase.</li>
+                <li><b>Max la fait tout seul</b>, sans plan ni équipe, sur une nouvelle branche git.</li>
+                <li><b>Tu relis le diff</b>, puis tu commites et tu pousses depuis l’onglet Diff.</li>
+              </>
+            ) : (
+              <>
+                <li><b>Tu décris ce que tu veux</b> (un ticket, un bug, une fonctionnalité).</li>
+                <li><b>Max te soumet un plan</b> : tu le valides ou tu demandes des changements.</li>
+                <li><b>L’équipe code sur une nouvelle branche git</b>, puis tu relis le diff, commites et pousses.</li>
+              </>
+            )}
+          </ol>
+          <p className="small muted">{quick ? 'Mode rapide : pour les petites tâches. Pour un gros chantier, passe en « Complet ».' : 'Mode complet : pour les tâches qui touchent plusieurs fichiers. Pour une retouche, passe en « Rapide ».'} Le choix se fait sous la zone de saisie.</p>
+        </section>
+      )}
       {!project && (
         <>
           <section className="card">
@@ -112,17 +147,7 @@ function Welcome() {
           </section>
         </>
       )}
-      {connection === 'live' && (
-        <section className="card">
-          <h3>Ton bureau</h3>
-          <p className="small muted path">{tilde(dir)}</p>
-          <div className="row">
-            <button className="btn small" onClick={() => send({ t: 'open_root' })}>Ouvrir le dossier</button>
-            <button className="btn small" onClick={() => send({ t: 'open_root', rules: true })}>Le règlement du bureau</button>
-          </div>
-          <p className="small muted">Le règlement, c’est ce que l’équipe doit savoir sur toi : Max le lit avant chaque mission.</p>
-        </section>
-      )}
+      {!project && mine}
       {missions.length > 0 && (
         <section className="card">
           <h3>Dernières missions</h3>
@@ -138,6 +163,7 @@ function Welcome() {
           ))}
         </section>
       )}
+      {project && mine}
     </>
   );
 }
@@ -260,7 +286,10 @@ function FilesSection() {
         </p>
       )}
       {files ? <FileList /> : <p className="small muted">{mission?.project ? 'Les fichiers que l’équipe modifie arriveront ici.' : 'Les fichiers de l’équipe arriveront ici (et dans le dossier de la mission).'}</p>}
-      {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir dans l’éditeur' : 'Ouvrir le dossier de la mission'}</button>}
+      <div className="row">
+        {mission?.project && mission.branch && <button className="btn small" onClick={() => { sfx('click'); window.dispatchEvent(new CustomEvent('bureau:tab', { detail: 2 })); }}>🔀 Voir le diff</button>}
+        {mission && !replaying && <button className="btn small ghost" onClick={() => send({ t: 'open', missionId: mission.id })}>{mission.project ? 'Ouvrir dans l’éditeur' : 'Ouvrir le dossier de la mission'}</button>}
+      </div>
     </section>
   );
 }
