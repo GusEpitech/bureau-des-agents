@@ -11,6 +11,7 @@ export function animateActor(a: Actor, dt: number, t: number, cat: Cat) {
   if (a.doing === 'sofa' || a.doing === 'sleep') { pose = 'sit'; a.dir = 'down'; }
   else if (a.cur?.t === 'wait' && a.cur.pose) pose = a.cur.pose;
   else if (a.moving) pose = a.carrying ? 'carry' : 'walk';
+  else if (a.doing === 'play') pose = 'type';
   else if (a.angryUntil > t && a.role === 'analyse') { pose = 'fist'; a.dir = 'down'; }
   else if (a.asks > 0) pose = 'raise';
   else if (a.cheerUntil > t) pose = 'cheer';

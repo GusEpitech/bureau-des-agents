@@ -561,6 +561,29 @@ function picnicSprite(): Sprite {
   return { c, ox: 0, oy: -14, sort: 15 };
 }
 
+/** Un babyfoot : un cadre en bois, le terrain vert, des rangées de petits joueurs et deux poignées à chaque bout. */
+function foosballSprite(): Sprite {
+  const c = makeCanvas(32, 22);
+  const g = g2d(c);
+  rect(g, 2, 8, 28, 9, '#6b3b22');
+  hline(g, 2, 8, 28, '#9a5a32');
+  rect(g, 3, 9, 26, 6, '#2f8a4a');
+  for (let x = 4; x < 28; x += 4) vline(g, x, 9, 6, '#3aa05a');
+  vline(g, 15, 9, 6, '#d8f0d8');
+  rect(g, 2, 15, 28, 3, '#4a2a18');
+  for (const x of [3, 27]) rect(g, x, 18, 2, 3, '#2a1810');
+  // les tiges, les joueurs rouges et bleus, les poignées
+  for (const [x, col] of [[7, '#e2574c'], [11, '#e2574c'], [19, '#4d7fc0'], [23, '#4d7fc0']] as [number, string][]) {
+    hline(g, x, 12, 1, '#c9cbd6');
+    rect(g, x - 1, 10, 3, 1, col);
+    rect(g, x - 1, 13, 3, 1, col);
+  }
+  rect(g, 0, 11, 3, 2, '#2b2836');
+  rect(g, 29, 11, 3, 2, '#2b2836');
+  outline(c, P.ink);
+  return { c, ox: 0, oy: -6, sort: 15 };
+}
+
 /** Un massif de fleurs. */
 function flowerbedSprite(seed: number): Sprite {
   const c = makeCanvas(32, 14);
@@ -643,6 +666,7 @@ export function furnitureSprite(f: Furn): Sprite {
     case 'bench': s = benchSprite(); break;
     case 'tree': s = treeSprite(f.seed ?? 1); break;
     case 'ashtray': s = ashtraySprite(); break;
+    case 'foosball': s = foosballSprite(); break;
     case 'picnic': s = picnicSprite(); break;
     case 'flowerbed': s = flowerbedSprite(f.seed ?? 1); break;
     case 'bbq': s = bbqSprite(); break;

@@ -8,11 +8,14 @@ import { g2d, hline, lighten, makeCanvas, mix, P, px, rect, rng, vline, type G }
 
 export type TimeOfDay = 'day' | 'evening' | 'night';
 
-const SKY: Record<TimeOfDay, { bands: string[]; city: string; city2: string; lit: string; litRate: number }> = {
+export const SKY: Record<TimeOfDay, { bands: string[]; city: string; city2: string; lit: string; litRate: number }> = {
   day: { bands: ['#4f9fe8', '#68b1ef', '#83c2f3', '#a3d3f6', '#c3e3f8'], city: '#6f80a8', city2: '#8494b9', lit: '#d4e2f5', litRate: 0.08 },
   evening: { bands: ['#2a2453', '#43306a', '#6c3a72', '#a64a6c', '#dc6a5c', '#ff9d5c'], city: '#1d1631', city2: '#2a2040', lit: '#ffcf6b', litRate: 0.22 },
   night: { bands: ['#0a0a20', '#0f0f2c', '#151538', '#1c1a45', '#231e50'], city: '#0a0816', city2: '#120f22', lit: '#ffcf6b', litRate: 0.32 },
 };
+
+/** Les fenêtres allumées de la ville, par moment de la journée : le moteur en fait clignoter quelques-unes. */
+export const CITY_LIGHTS: Record<TimeOfDay, { x: number; y: number; dark: string }[]> = { day: [], evening: [], night: [] };
 
 function floor(g: G) {
   const r = rng(42);
@@ -199,7 +202,7 @@ function windowPane(g: G, wx: number, wy: number, ww: number, wh: number, tod: T
     const top = wy + wh - bhh + (far ? 3 : 0);
     rect(g, x, top, Math.min(bw, wx + ww - x), wy + wh - top, far ? sky.city2 : sky.city);
     for (let yy = top + 2; yy < wy + wh - 1; yy += 2) {
-      for (let xx = x + 1; xx < Math.min(x + bw - 1, wx + ww - 1); xx += 2) if (r() < sky.litRate) px(g, xx, yy, sky.lit);
+      for (let xx = x + 1; xx < Math.min(x + bw - 1, wx + ww - 1); xx += 2) if (r() < sky.litRate) { px(g, xx, yy, sky.lit); CITY_LIGHTS[tod].push({ x: xx, y: yy, dark: far ? sky.city2 : sky.city }); }
     }
     x += bw;
   }
@@ -489,6 +492,7 @@ export function drawRoom(tod: TimeOfDay): HTMLCanvasElement {
   floor(g);
   for (const z of ZONES) rug(g, z.x, z.y, z.w, z.h, ROLES[z.role].color);
   backWall(g);
+  CITY_LIGHTS[tod].length = 0;
   WINDOWS.forEach((w, i) => windowPane(g, w.x, w.y, w.w, w.h, tod, i + 1));
   whiteboard(g);
   clockFace(g);

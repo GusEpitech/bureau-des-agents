@@ -46,7 +46,7 @@ export class Actor {
   smokeUntil = 0;
   nextPuff = 0;
   /** ce qu'il fait de son temps libre : prendre des notes, regarder son téléphone, être assis ou dormir sur le canapé */
-  doing: '' | 'notes' | 'phone' | 'sofa' | 'sleep' = '';
+  doing: '' | 'notes' | 'phone' | 'sofa' | 'sleep' | 'play' = '';
   /** sa place sur le canapé (0 gauche, 1 droite), -1 s'il n'y est pas */
   slot = -1;
   // ── l'équipe qui vit au bureau : elle se balade en attendant, et prend un bureau quand Max l'appelle ──

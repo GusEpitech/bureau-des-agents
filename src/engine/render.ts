@@ -5,6 +5,8 @@
 import type { ActKind } from '../../shared/protocol.ts';
 import { Ambience } from './ambience.ts';
 import { debug } from './debug.ts';
+import { deskStuff } from './deskstuff.ts';
+import { outside } from './outside.ts';
 import { weather } from './weather.ts';
 import { yardLife } from './yardlife.ts';
 import { furniturePlacement } from './furniture.ts';
@@ -52,15 +54,20 @@ function lightSprite(color: string, r: number): HTMLCanvasElement {
   return c;
 }
 
+const FADE_MS = 3000;
+
 export class Renderer {
-  private bg: HTMLCanvasElement | null = null;
-  private bgTod: TimeOfDay | null = null;
+  private bgs = new Map<TimeOfDay, HTMLCanvasElement>();
+  /** le changement d'heure (jour → soir…) : les deux images se fondent l'une dans l'autre */
+  private lastTod: TimeOfDay | null = null;
+  private fromTod: TimeOfDay | null = null;
+  private fadeAt = 0;
+  private mixC = makeCanvas(W, H);
+  private mixG = g2d(this.mixC);
   private amb = new Ambience();
   private light = makeCanvas(W, H);
   private lg = g2d(this.light);
-  private staticLayer = makeCanvas(W, H);
-  private sg = g2d(this.staticLayer);
-  private staticKey = '';
+  private statics = new Map<TimeOfDay, { c: HTMLCanvasElement; g: G; key: string }>();
   private placed: Placed[] = FURNITURE.map((f) => { const p = furniturePlacement(f); return { f, c: p.s.c, x: p.x, y: p.y, sortY: p.sortY }; });
   private stars: { x: number; y: number; p: number }[] = [];
 
@@ -69,14 +76,32 @@ export class Renderer {
     for (const w of WINDOWS) for (let i = 0; i < 9; i++) this.stars.push({ x: w.x + 2 + Math.floor(r() * (w.w - 4)), y: w.y + 1 + Math.floor(r() * 12), p: r() * 6 });
   }
 
+  get fading() { return this.fromTod !== null && performance.now() - this.fadeAt < FADE_MS; }
+
   draw(g: G, world: World, tod: TimeOfDay, now: Date) {
-    if (!this.bg || this.bgTod !== tod) { this.bg = drawRoom(tod); this.bgTod = tod; }
+    if (this.lastTod !== null && this.lastTod !== tod) { this.fromTod = this.lastTod; this.fadeAt = performance.now(); }
+    this.lastTod = tod;
+    if (!this.fading) { this.fromTod = null; this.frame(g, world, tod, now); return; }
+    // pendant le changement d'heure : l'ancienne image, puis la nouvelle par-dessus, de plus en plus opaque
+    const u = (performance.now() - this.fadeAt) / FADE_MS;
+    this.frame(g, world, this.fromTod!, now);
+    this.frame(this.mixG, world, tod, now);
+    g.globalAlpha = u * u * (3 - 2 * u);
+    g.drawImage(this.mixC, 0, 0);
+    g.globalAlpha = 1;
+  }
+
+  private frame(g: G, world: World, tod: TimeOfDay, now: Date) {
+    let bg = this.bgs.get(tod);
+    if (!bg) { bg = drawRoom(tod); this.bgs.set(tod, bg); }
     const t = world.time;
     g.globalCompositeOperation = 'source-over';
     g.globalAlpha = 1;
-    g.drawImage(this.bg, 0, 0);
+    g.drawImage(bg, 0, 0);
     if (tod === 'night') this.twinkle(g, t);
     if (tod === 'day') this.clouds(g, t);
+    outside.windows(g, t, tod);
+    outside.street(g, t, tod);
     if (!debug.noWeather) { weather.windows(g, t); weather.ground(g, t); }
     this.clockHands(g, now);
     this.board(g, world, t);
@@ -188,6 +213,7 @@ export class Renderer {
   private furnitureLive(g: G, p: Placed, world: World, who: Actor | null, t: number) {
     const f = p.f;
     if (f.kind === 'desk' && who) {
+      deskStuff(g, p.x, p.y, who.name, ROLES[who.role].color);
       const on = t - who.actAt < 9;
       const col = on && who.act ? SCREEN[who.act] : '#5b6b8c';
       switch (f.role) {
@@ -251,6 +277,20 @@ export class Renderer {
         g.fillRect(p.x + 3, p.y + 7 + i * 4, 1, 1);
         g.fillStyle = Math.sin(t * 5 + i) > 0.6 ? '#3ddc97' : '#1f3a2e';
         g.fillRect(p.x + 5, p.y + 7 + i * 4, 1, 1);
+      }
+    }
+    if (f.kind === 'foosball') {
+      // la balle roule pendant une partie, les joueurs de la table glissent
+      const playing = t < world.playUntil;
+      const bx = playing ? 6 + Math.round((Math.sin(t * 5.3) * 0.5 + 0.5) * 20) : 15;
+      g.fillStyle = '#f6f2e9';
+      g.fillRect(p.x + bx, p.y + 11, 2, 2);
+      if (playing) {
+        const k = Math.round(Math.sin(t * 9));
+        g.fillStyle = '#e2574c';
+        g.fillRect(p.x + 6 + k, p.y + 10, 3, 1);
+        g.fillStyle = '#4d7fc0';
+        g.fillRect(p.x + 22 - k, p.y + 13, 3, 1);
       }
     }
     if (f.kind === 'jukebox') this.jukeboxLights(g, p, world, t);
@@ -400,10 +440,12 @@ export class Renderer {
   /** Les lumières qui ne bougent pas (néon, fenêtres, lampadaires…) : dessinées une fois, refaites seulement quand elles changent. */
   private staticLights(world: World, tod: TimeOfDay, flick: number): HTMLCanvasElement {
     const night = tod === 'night';
+    let st = this.statics.get(tod);
+    if (!st) { const c = makeCanvas(W, H); st = { c, g: g2d(c), key: '' }; this.statics.set(tod, st); }
     const key = `${tod}|${world.neonIndex}|${flick}|${['lamp', 'lamp-r', 'lamp-yard-l', 'lamp-yard-r'].map((id) => (world.lampsOff.has(id) ? 0 : 1)).join('')}`;
-    if (this.staticKey === key) return this.staticLayer;
-    this.staticKey = key;
-    const l = this.sg;
+    if (st.key === key) return st.c;
+    st.key = key;
+    const l = st.g;
     l.globalCompositeOperation = 'source-over';
     l.fillStyle = AMBIENT[tod];
     l.fillRect(0, 0, W, H);
@@ -435,7 +477,7 @@ export class Renderer {
     l.globalCompositeOperation = 'multiply';
     l.drawImage(this.amb.vignette(tod), 0, 0);
     l.globalCompositeOperation = 'source-over';
-    return this.staticLayer;
+    return st.c;
   }
 
   private lighting(g: G, world: World, tod: TimeOfDay, atDesk: Map<string, Actor>, t: number) {

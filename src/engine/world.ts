@@ -54,6 +54,8 @@ export class World {
   lampsOff = new Set<string>();
   /** le mode soirée (boule à facettes, tout le monde danse) */
   discoUntil = 0;
+  /** jusqu'à quand une partie de babyfoot est en cours */
+  playUntil = 0;
   /** la musique du jukebox : est-ce qu'elle joue, et l'énergie des basses (0 à 1) */
   musicOn = false;
   musicLevel = 0;
@@ -211,7 +213,39 @@ export class World {
     } else if (r < 0.78) {
       const s = pick(SPOTS.jukebox);
       if (s) { go(s, 'down', 4000, () => { this.fx.floatIcon(a.x, a.y - 22, 'note'); a.cheerUntil = this.time + 1.5; }); return; }
-    } else if (r < 0.9) {
+    } else if (r < 0.85) {
+      // une partie de babyfoot à deux, dans la cour
+      const mate = [...this.residents].find((b) => b !== a && !b.busy && !b.seated && !b.onMission && !b.at && b.alpha > 0.9);
+      const pair = SPOTS.play.find(([p, q]) => !taken.has(p.join(',')) && !taken.has(q.join(',')));
+      if (mate && pair && this.time > this.playUntil) {
+        const [p, q] = pair;
+        const ms = 7000 + Math.random() * 3000;
+        const play = (who: Actor, tile: Tile, face: Dir, last: boolean) => {
+          who.at = tile.join(',');
+          who.nextWander = this.time + 14;
+          this.queue(who,
+            { t: 'walk', tile, face },
+            { t: 'wait', ms: 400, dir: face },
+            { t: 'call', fn: () => { who.doing = 'play'; this.playUntil = Math.max(this.playUntil, this.time + ms / 1000); } },
+            { t: 'wait', ms, dir: face },
+            { t: 'call', fn: () => {
+              who.doing = '';
+              who.at = null;
+              if (last) {
+                // le gagnant lève les bras, l'autre baisse les yeux
+                const [win, lose] = Math.random() < 0.5 ? [a, mate] : [mate, a];
+                win.cheerUntil = this.time + 1.8;
+                this.fx.floatIcon(win.x, win.y - 24, 'heart');
+                lose.sadUntil = this.time + 1.8;
+              }
+            } },
+          );
+        };
+        play(a, p, 'right', false);
+        play(mate, q, 'left', true);
+        return;
+      }
+    } else if (r < 0.93) {
       // une discussion à deux
       const mate = [...this.residents].find((b) => b !== a && !b.busy && !b.seated && !b.onMission && !b.at && b.alpha > 0.9);
       const spots = SPOTS.chat.filter(([p, q]) => this.grid[p[1]]?.[p[0]] && this.grid[q[1]]?.[q[0]] && !taken.has(p.join(',')) && !taken.has(q.join(',')));

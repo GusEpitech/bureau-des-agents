@@ -7,6 +7,8 @@ import { applySound } from './audio/sound.ts';
 import { denseOf, hasPref, projectModeOf, savePref, techOf, useOffice, type Tod } from './state/store.ts';
 import { AskBar, Dialog } from './ui/Dialog.tsx';
 import { FinalCard, History, SettingsPanel, Toasts, Viewer } from './ui/Modals.tsx';
+import { timeOfDay } from './engine/instance.ts';
+import { weather } from './engine/weather.ts';
 import { DebugMenu } from './ui/Debug.tsx';
 import { Office } from './ui/Office.tsx';
 import { Panel } from './ui/Panel.tsx';
@@ -51,7 +53,25 @@ function ExitFilming() {
   );
 }
 
+/** L'ambiance du bureau (l'heure et la pluie), pour teinter doucement l'interface autour. */
+function useAmbience() {
+  const pref = useOffice((s) => s.tod);
+  const [look, setLook] = useState({ tod: timeOfDay(pref), rain: weather.raining });
+  useEffect(() => {
+    const read = () => {
+      const tod = timeOfDay(pref);
+      const rain = weather.raining;
+      setLook((l) => (l.tod === tod && l.rain === rain ? l : { tod, rain }));
+    };
+    read();
+    const id = setInterval(read, 2000);
+    return () => clearInterval(id);
+  }, [pref]);
+  return look;
+}
+
 export function App() {
+  const look = useAmbience();
   const vertical = useOffice((s) => s.vertical || s.portrait);
   const project = useOffice(projectModeOf);
   const filming = useOffice((s) => s.filming);
@@ -126,7 +146,7 @@ export function App() {
   }, []);
 
   return (
-    <div className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''} ${dense ? 'dense' : ''} ${officeHidden ? 'office-hidden' : ''}`}>
+    <div data-tod={look.tod} data-rain={look.rain ? '1' : '0'} className={`app ${vertical ? 'vertical' : ''} ${filming ? 'filming' : ''} ${project ? 'project' : ''} ${dense ? 'dense' : ''} ${officeHidden ? 'office-hidden' : ''}`}>
       <div className="frame">
         <TopBar />
         <div

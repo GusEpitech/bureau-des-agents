@@ -128,9 +128,9 @@ export function Office() {
       const level = m ? m.level : jukebox.sample();
       world.setMusic(m ? m.on : jukebox.playing, level, m ? m.beat : jukebox.beat);
       // le menu de debug force la cadence ; sinon la fluidité des Réglages ne compte que quand quelque chose bouge (au repos : 8)
-      const moving = camMoving || active;
+      const moving = camMoving || active || renderer.fading;
       const rate = debug.fpsCap || (moving ? (st.fluidity === 'max' ? -1 : st.fluidity === 'smooth' ? 60 : 0) : 0);
-      const wait = rate > 0 ? 1 / rate : rate < 0 ? 0 : camMoving || (active && !world.calm) ? 1 / 24 : active ? 1 / 15 : 1 / 8;
+      const wait = rate > 0 ? 1 / rate : rate < 0 ? 0 : camMoving || renderer.fading || (active && !world.calm) ? 1 / 24 : active ? 1 / 15 : 1 / 8;
       if (!cap && acc < wait) return;
       const t0 = performance.now();
       active = world.update(debug.pause ? 0 : acc);

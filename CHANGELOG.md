@@ -40,10 +40,16 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - De la pluie derrière les fenêtres et dans la cour (gouttes sur les vitres, éclaboussures, flaques qui reflètent les lampadaires). Elle passe toute seule, deux minutes tous les quarts d'heure.
 - La cour vit : feuilles qui tombent des arbres, lucioles et papillons de nuit autour des lampadaires le soir. De la vapeur monte des tasses, et les robots qui travaillent ont le reflet de leur écran sur la visière.
 - Un vrai portail au fond de la cour : enseigne en bois, piliers avec leurs lanternes, battants de fer ouverts, la rue derrière.
+- Dehors : les fenêtres de la ville s'allument et s'éteignent, un avion et des oiseaux passent, des étoiles filantes la nuit, la lune a sa vraie phase. Une voiture passe de temps en temps dans la rue derrière le portail, avec ses phares la nuit.
+- Le changement d'heure (jour, soir, nuit) se fait en fondu au lieu de sauter.
+- Chaque robot pose un petit objet sur son bureau (canard, mini-plante, post-it, photo, figurine, mug) : toujours le même pour le même prénom.
+- Un babyfoot dans la cour : deux robots en pause y jouent, la balle roule, le gagnant lève les bras.
 - La cour s'équipe : table de pique-nique avec parasol, massifs de fleurs, barbecue. Et Loula rejoint l'exploration.
 - Des textures plus détaillées : veines, nœuds et clous du parquet, passages usés, tapis avec franges et motifs, papier peint et boiseries, murs en briques, dalles fissurées et mousse dans la cour, fleurs dans l'herbe.
 
 **L'interface**
+- Le panneau prend le style du bureau : cartes à coins francs avec une ombre pleine, boutons qui s'enfoncent quand on appuie, titres en police pixel, une trame de points discrète, des barres de défilement carrées.
+- La teinte de l'interface suit doucement l'heure et la météo du bureau (dorée le jour, rose le soir, bleutée la nuit, grise sous la pluie).
 - Un réglage « Fluidité » (économe, fluide à 60 images par seconde, ou max) dans les Réglages. Elle ne compte que quand quelque chose bouge : au repos, le bureau reste à 8 images par seconde.
 - Une barre du haut avec des boutons nommés, un sélecteur de projet et de mode, des réglages rangés par sujet, une fenêtre de l'équipe plus claire.
 
