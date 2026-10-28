@@ -44,6 +44,9 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - Le changement d'heure (jour, soir, nuit) se fait en fondu au lieu de sauter.
 - Chaque robot pose un petit objet sur son bureau (canard, mini-plante, post-it, photo, figurine, mug) : toujours le même pour le même prénom.
 - Un babyfoot dans la cour : deux robots en pause y jouent, la balle roule, le gagnant lève les bras.
+- Les robots ont du poids : un petit rebond quand ils s'assoient (écrasé d'un pixel) et se lèvent (étiré), et en mission ils tournent d'abord la tête vers où ils vont avant de partir.
+- Quand tu valides le plan, Max tape dans ses mains, des étincelles vertes partent du tableau et les autres se tournent vers lui.
+- Le soir et la nuit, chaque bureau occupé allume sa lampe (flaque chaude sur le plateau) et l'éteint doucement quand son agent part.
 - La cour s'équipe : table de pique-nique avec parasol, massifs de fleurs, barbecue. Et Loula rejoint l'exploration.
 - Des textures plus détaillées : veines, nœuds et clous du parquet, passages usés, tapis avec franges et motifs, papier peint et boiseries, murs en briques, dalles fissurées et mousse dans la cour, fleurs dans l'herbe.
 

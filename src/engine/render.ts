@@ -161,7 +161,11 @@ export class Renderer {
       g.fillRect(x - 4, y - 2, 8, 1);
     }
     const sprite = robotSprite(a.role, a.pose, seated ? 'down' : a.dir, a.frame, a.eyes);
-    g.drawImage(sprite, x - ANCHOR_X, y - ANCHOR_Y);
+    // un petit rebond : il s'écrase d'un pixel en s'asseyant, s'étire d'un pixel en se levant (les pieds restent au sol)
+    const since = world.time - a.squashAt;
+    const dh = since >= 0 && since < 0.16 ? (a.squashKind === 'sit' ? -1 : 1) : 0;
+    if (dh) g.drawImage(sprite, x - ANCHOR_X, y - ANCHOR_Y - dh, sprite.width, sprite.height + dh);
+    else g.drawImage(sprite, x - ANCHOR_X, y - ANCHOR_Y);
     if (seated && a.act && world.time - a.actAt < 9) this.screenGlint(g, a, x, y, world.time);
     if (a.doing === 'notes' && !a.moving) {
       // le carnet tenu devant lui, le stylo qui court sur la page

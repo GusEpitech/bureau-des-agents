@@ -3,7 +3,7 @@
 // il y a une lampe ou un écran, de la poussière qui flotte dans les rayons, la traînée du néon, et un vignettage
 // qui assombrit les coins. Les formes sont dessinées une fois ; à chaque image on ne fait que les coller.
 import type { ActKind } from '../../shared/protocol.ts';
-import { H, NEON, OFFICE_H, T, W, WINDOWS } from './layout.ts';
+import { H, NEON, OFFICE_H, SEATS, T, W, WINDOWS } from './layout.ts';
 import { g2d, makeCanvas, rgba, rng, type G } from './pixels.ts';
 import type { TimeOfDay } from './room.ts';
 import type { Actor } from './actor.ts';
@@ -142,6 +142,9 @@ export class Ambience {
   private beams = new Map<TimeOfDay, HTMLCanvasElement>();
   private vignettes = new Map<TimeOfDay, HTMLCanvasElement>();
   private motes: Mote[];
+  /** la lampe de chaque bureau : de 0 (éteinte) à 1 (allumée), qui monte et descend doucement ; et la couleur de son dernier écran */
+  private desks = new Map<string, { v: number; col: string; on: boolean }>();
+  private lastT = 0;
 
   constructor() {
     const r = rng(2024);
@@ -177,12 +180,28 @@ export class Ambience {
       const busy = world.missionActive ? 1.35 : 1;
       stamp(g, 9 * T + 14, 7 * T + 4, 30, 14, '#ffd9a0', 0.2 * busy);
       stamp(g, 11 * T, 8 * T + 10, 46, 16, '#ff8a3d', 0.07 * busy);
-      // les écrans : une lueur colorée sur le bureau et le sol devant chaque poste occupé
-      for (const a of atDesk.values()) {
-        const on = t - a.actAt < 9;
-        const col = on && a.act ? SCREEN[a.act] : '#8fa4d0';
-        const wob = on ? 0.88 + 0.12 * Math.sin(t * 9 + a.seat!.x) : 1;
-        stamp(g, a.seat!.x, a.seat!.y - 1, on ? 26 : 18, on ? 11 : 8, col, (on ? 0.16 : 0.07) * wob);
+      // les bureaux : la lampe s'allume quand quelqu'un s'assoit et s'éteint doucement quand il part ; l'écran éclaire plus fort
+      // quand il travaille (le soir et la nuit seulement : ce bloc ne tourne pas le jour)
+      const dt = Math.min(0.2, Math.max(0, t - this.lastT));
+      this.lastT = t;
+      for (const seat of SEATS) {
+        const a = atDesk.get(seat.deskId);
+        let d = this.desks.get(seat.deskId);
+        if (!d) { d = { v: 0, col: '#8fa4d0', on: false }; this.desks.set(seat.deskId, d); }
+        if (a) {
+          d.on = t - a.actAt < 9;
+          d.col = d.on && a.act ? SCREEN[a.act] : '#8fa4d0';
+        }
+        d.v += Math.max(-dt * 0.5, Math.min(dt * 1.5, (a ? 1 : 0) - d.v));
+        if (d.v < 0.01) continue;
+        const wob = d.on ? 0.88 + 0.12 * Math.sin(t * 9 + seat.x) : 1;
+        stamp(g, seat.x, seat.y - 1, d.on ? 26 : 18, d.on ? 11 : 8, d.col, (d.on ? 0.16 : 0.07) * wob * d.v);
+        // la lampe de bureau : une flaque chaude sur le plateau, côté gauche, et son ampoule
+        stamp(g, seat.x - 9, seat.y + 3, 20, 8, '#ffcf8a', 0.13 * d.v);
+        g.fillStyle = '#ffe9b0';
+        g.globalAlpha = 0.8 * d.v;
+        g.fillRect(seat.x - 12, seat.y - 1, 2, 1);
+        g.globalAlpha = 1;
       }
       // la traînée du néon vers le sol (elle grésille avec lui)
       const neonColor = ['#ff8a3d', '#ff5fa2', '#3fd8ff', '#3ddc97', '#a98bff'][world.neonIndex] ?? '#ff8a3d';

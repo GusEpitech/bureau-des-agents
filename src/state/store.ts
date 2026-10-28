@@ -520,6 +520,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         set({ asks });
         if (s.chat.some((c) => c.requestId === ev.requestId)) {
           const state: ChatMsg['plan'] = ev.cancelled ? 'cancelled' : ev.allow ? 'approved' : 'changes';
+          if (live && state === 'approved') sfx('yes');
           const chat = get().chat.map((c) => (c.requestId === ev.requestId ? { ...c, plan: state } : c));
           // tes remarques sur le plan restent dans la conversation
           if (ev.message) chat.push({ id: ++feedId, at, kind: 'user', text: ev.message });

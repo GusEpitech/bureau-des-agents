@@ -6,6 +6,7 @@ import type { Eyes, Pose } from './robots.ts';
 /** La pose, le cadre d'animation et le regard d'un robot, d'après ce qu'il fait à l'instant `t`. */
 export function animateActor(a: Actor, dt: number, t: number, cat: Cat) {
   a.animT += dt;
+  if (a.seated !== a.wasSeated) { a.wasSeated = a.seated; a.squashAt = t; a.squashKind = a.seated ? 'sit' : 'stand'; }
     const recent = t - a.actAt < 9;
   let pose: Pose;
   if (a.doing === 'sofa' || a.doing === 'sleep') { pose = 'sit'; a.dir = 'down'; }
@@ -54,6 +55,7 @@ export function animateActor(a: Actor, dt: number, t: number, cat: Cat) {
   else if (pose === 'write') eyes = 'up';
   else if (t - a.thinkAt < 2.5 && !a.moving) eyes = 'up';
   else if (a.lookUntil > t && !a.moving) eyes = a.look;
+  if (a.lookAheadUntil > t) eyes = a.dir === 'left' ? 'left' : a.dir === 'right' ? 'right' : a.dir === 'up' ? 'up' : 'down';
   if (a.doing === 'notes' || a.doing === 'phone') eyes = 'down';
   else if (a.doing === 'sofa' && cat.onSofa && a.happyUntil <= t && !a.moving) eyes = a.slot === 0 ? 'right' : 'left'; // il regarde le chat dormir
   if (a.blinkUntil > t && eyes !== 'happy' && eyes !== 'angry') eyes = 'blink';

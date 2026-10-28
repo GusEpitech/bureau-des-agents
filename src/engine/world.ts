@@ -56,6 +56,8 @@ export class World {
   discoUntil = 0;
   /** jusqu'à quand une partie de babyfoot est en cours */
   playUntil = 0;
+  /** les demandes de permission qui sont des plans à valider */
+  private planAsks = new Set<string>();
   /** la musique du jukebox : est-ce qu'elle joue, et l'énergie des basses (0 à 1) */
   musicOn = false;
   musicLevel = 0;
@@ -349,6 +351,13 @@ export class World {
         const tiles = findPath(this.grid, a.tile, task.tile) ?? nearestReach(this.grid, a.tile, task.tile);
         a.path = smooth(this.grid, a, (tiles ?? [task.tile]).map(tileFeet), task.tile);
         if (task.then) a.path.push(task.then);
+        // en mission : il tourne d'abord la tête vers où il va, puis il part (sauf s'il enchaîne deux marches)
+        if (a.onMission && this.time - a.walkEndAt > 1 && a.path.length) {
+          const p = a.path[0];
+          const dx = p.x - a.x, dy = p.y - a.y;
+          a.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+          a.lookAheadUntil = this.time + 0.18;
+        }
         break;
       }
       case 'slide':
@@ -376,6 +385,7 @@ export class World {
       case 'walk':
       case 'slide':
       case 'sit': {
+        if (task.t === 'walk' && this.time < a.lookAheadUntil) return false;
         const speed = (task.t === 'slide' && task.speed) || (task.t === 'sit' ? 30 : WALK_SPEED * a.pace);
         let budget = speed * dt;
         const px = a.x, py = a.y;
@@ -405,6 +415,7 @@ export class World {
         }
         if (a.path.length) return false;
         a.moving = false;
+        a.walkEndAt = this.time;
         if (task.t === 'sit') { a.seated = true; a.seat = task.seat; a.dir = 'down'; }
         else if (task.face) a.dir = task.face;
         return true;
@@ -574,10 +585,18 @@ export class World {
       case 'ask': {
         const a = this.actors.get(ev.who) ?? chef;
         a.asks++;
+        if (ev.tool === 'ExitPlanMode') this.planAsks.add(ev.requestId);
         if (live) this.fx.floatIcon(a.x, a.y - 26, 'alert');
         break;
       }
       case 'ask_done':
+        // le plan est validé : Max tape dans ses mains, des étincelles vertes partent du tableau
+        if (this.planAsks.delete(ev.requestId) && ev.allow && live) {
+          chef.cheerUntil = this.time + 1.6;
+          chef.happyUntil = this.time + 2.2;
+          for (let i = 0; i < 3; i++) setTimeout(() => this.fx.sparkle(SPOTS.boardPx.x + (i - 1) * 40, 22, 8, '#3ddc97'), i * 160);
+          for (const b of this.actors.values()) if (b !== chef && !b.seated && !b.moving && b.alpha > 0.9) { b.dir = b.x < chef.x ? 'right' : 'left'; b.happyUntil = this.time + 1.4; }
+        }
         for (const a of this.actors.values()) if (a.asks > 0) { a.asks = Math.max(0, a.asks - 1); break; }
         break;
       case 'end':
