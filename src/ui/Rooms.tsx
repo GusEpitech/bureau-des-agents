@@ -9,7 +9,7 @@ import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
 import { savePref, teamList, techOf, useOffice, type ActView, type Tod } from '../state/store.ts';
 import { useShallow } from 'zustand/react/shallow';
-import { fileIcon, fmtClock, fmtDate, fmtDuration, fmtSize, plural, readable, tilde } from './format.ts';
+import { fileIcon, fmtClock, fmtDate, fmtDuration, fmtSize, fmtTokens, plural, readable, tilde } from './format.ts';
 import { party } from './interact.ts';
 import { mdToHtml } from './md.ts';
 import { agentStats, Avatar } from './Panel.tsx';
@@ -323,6 +323,25 @@ function JukeboxRoom() {
   );
 }
 
+/** Qui a consommé quoi : la part des tokens de chaque métier, et un conseil quand l'exploration en prend la moitié. */
+function TokenShare({ team }: { team: ReturnType<typeof teamList> }) {
+  const done = team.filter((a) => a.tokens > 0);
+  const total = done.reduce((n, a) => n + a.tokens, 0);
+  if (!total) return null;
+  const by = new Map<Role, number>();
+  for (const a of done) by.set(a.role, (by.get(a.role) ?? 0) + a.tokens);
+  const rows = [...by.entries()].sort((a, b) => b[1] - a[1]);
+  const top = rows[0];
+  return (
+    <div className="tok-share">
+      <div className="tok-head"><b>{fmtTokens(total)} tokens</b> consommés par l’équipe jusqu’ici</div>
+      <div className="tok-bar">{rows.map(([r, n]) => <i key={r} style={{ flex: n, background: ROLES[r].color }} title={`${roleInfo(r).label} : ${fmtTokens(n)} tokens`} />)}</div>
+      <div className="tok-legend">{rows.map(([r, n]) => <span key={r} style={{ ['--c' as string]: ROLES[r].color }}>{roleInfo(r).icon} {roleInfo(r).label} {Math.round((n / total) * 100)} %</span>)}</div>
+      {top[0] === 'recherche' && top[1] / total >= 0.5 && <p className="small muted">L’exploration lit beaucoup de code : un modèle plus léger (Haiku) ou un effort faible, dans Réglages › Économiser des tokens, coûte nettement moins.</p>}
+    </div>
+  );
+}
+
 // ── Toute l'équipe : les métiers et leurs outils, la mission en cours, l'historique ──
 function TeamRoom({ role }: { role?: Role }) {
   const [tab, setTab] = useState<'roles' | 'now' | 'history'>(role ? 'roles' : 'now');
@@ -358,11 +377,12 @@ function TeamRoom({ role }: { role?: Role }) {
             {team.some((a) => a.status === 'done') && <span className="sum done">{team.filter((a) => a.status === 'done').length} ont rendu leur rapport</span>}
             {team.some((a) => a.status === 'failed') && <span className="sum failed">{team.filter((a) => a.status === 'failed').length} n’ont pas fini</span>}
           </p>
+          <TokenShare team={team} />
           <div className="who">
             {team.map((a) => (
               <button key={a.id} className={`who-row ${a.status}`} style={{ ['--c' as string]: ROLES[a.role].color }} title="Voir son travail" onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'agent', id: a.id } }); }}>
                 <Avatar role={a.role} size={26} />
-                <span className="who-id"><b>{a.name}</b><small>{roleInfo(a.role).icon} {roleInfo(a.role).label}</small></span>
+                <span className="who-id"><b>{a.name}</b><small>{roleInfo(a.role).icon} {roleInfo(a.role).label}{a.tokens ? ` · ${fmtTokens(a.tokens)} tokens` : ''}</small></span>
                 <span className="who-task">{a.task}</span>
                 <span className={`who-state ${a.status}`}>{a.status === 'done' ? '✓ rapport rendu' : a.status === 'failed' ? '✕ pas fini' : a.act ? a.act.label : '… au travail'}</span>
               </button>

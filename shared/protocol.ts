@@ -51,6 +51,8 @@ export type OfficeEvent =
   | { k: 'start'; text: string }
   /** `mcp` : les connecteurs MCP chargés dans la séance (état, nombre d'outils) */
   | { k: 'init'; model: string; auth: string; mcp?: McpServer[] }
+  /** la taille du contexte de Max à cet instant, en tokens (tout ce qu'il relit à chaque tour) */
+  | { k: 'ctx'; tokens: number }
   | { k: 'think'; who: string }
   | { k: 'typing'; who: string; text: string }
   | { k: 'say'; who: string; text: string }
@@ -130,6 +132,13 @@ export interface Settings {
   branchPattern: string;
   /** mode projet, version rapide : Max fait la petite tâche lui-même, sans plan à valider ni équipe */
   quick: boolean;
+  /** charger tes skills dans la séance (environ 7 000 tokens à chaque session) : coupé par défaut */
+  skills: boolean;
+  /** les connecteurs MCP coupés, par projet (clé : le dossier du projet ; valeur : « claude.ai:Canva », « local:supabase »…) */
+  mcpOff: Record<string, string[]>;
+  /** l'effort de réflexion de Max, et de chaque métier ('' : celui de Claude Code) */
+  chefEffort: string;
+  roleEffort: Partial<Record<Role, string>>;
 }
 
 /** Ton quota Claude : la part déjà utilisée (0 à 1) sur 5 heures et sur 7 jours, quand il se recharge (secondes), et quand on l'a mesuré. */

@@ -7,6 +7,7 @@ import { usageLine } from './tech.ts';
 import { ToolGroup } from './Tech.tsx';
 import { copyText, mdToHtml } from './md.ts';
 import { tidy } from './tidy.ts';
+import { fmtTokens } from './format.ts';
 import { branchFromPlan, tidyBranch } from '../../shared/branch.ts';
 
 const time = (at: number) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -132,6 +133,27 @@ function PlanMessage({ m }: { m: ChatMsg }) {
   );
 }
 
+const CTX_LIMIT = 200_000;
+
+/** La mémoire de Max : tout ce qu'il relit à chaque tour. Plus elle grossit, plus chaque message consomme. */
+function ContextBar() {
+  const ctx = useOffice((s) => s.ctx);
+  const send = useOffice((s) => s.send);
+  const replaying = useOffice((s) => s.replaying);
+  if (!ctx) return null;
+  const level = ctx >= 150_000 ? 'high' : ctx >= 100_000 ? 'warn' : 'ok';
+  return (
+    <div className={`ctx-bar ${level}`} title="Max relit toute la conversation à chaque tour : plus elle est longue, plus chaque message consomme de ton énergie.">
+      <span className="ctx-label">🧠 Mémoire de Max</span>
+      <span className="ctx-track"><i style={{ width: `${Math.min(100, (ctx / CTX_LIMIT) * 100)}%` }} /></span>
+      <span className="ctx-num">{fmtTokens(ctx)} tokens</span>
+      {level !== 'ok' && !replaying && (
+        <button className="btn small" onClick={() => { sfx('click'); send({ t: 'new' }); }} title="Range cette mission et repars d'une mémoire vide">＋ Nouvelle mission</button>
+      )}
+    </div>
+  );
+}
+
 export function ChatSection() {
   const chat = useOffice((s) => s.chat);
   const typing = useOffice((s) => s.chef.typing);
@@ -153,6 +175,7 @@ export function ChatSection() {
 
   return (
     <section className="card chat-card">
+      <ContextBar />
       <div className="chat" ref={box} onScroll={(e) => {
         const b = e.currentTarget;
         stick.current = b.scrollHeight - b.scrollTop - b.clientHeight < 40;

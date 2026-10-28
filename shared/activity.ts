@@ -195,3 +195,17 @@ export function permissionText(tool: string, input: Record<string, unknown> | un
   }
   return { label: `Je peux utiliser ${tool} ?`, detail: clipped, full: false };
 }
+
+/** Les niveaux d'effort de réflexion que Claude Code accepte ('' : celui de Claude Code). */
+export const EFFORTS: [string, string][] = [['', 'Celui de Claude Code'], ['low', 'Faible (rapide, économe)'], ['medium', 'Moyen'], ['high', 'Élevé'], ['xhigh', 'Très élevé'], ['max', 'Maximum']];
+
+/** La clé d'un connecteur MCP dans les réglages (« claude.ai:Canva », « local:supabase »). */
+export const mcpKey = (s: { name: string; source: 'claude.ai' | 'local' }) => `${s.source}:${s.name}`;
+
+/** Le préfixe des outils d'un connecteur, tel que Claude Code les nomme (mcp__claude_ai_Canva…) : sert à les retirer de la séance. */
+export function mcpPrefix(key: string): string {
+  const i = key.indexOf(':');
+  const source = key.slice(0, i), name = key.slice(i + 1);
+  const norm = (x: string) => x.replace(/[^A-Za-z0-9_-]/g, '_');
+  return source === 'claude.ai' ? `mcp__claude_ai_${norm(name)}` : `mcp__${norm(name)}`;
+}

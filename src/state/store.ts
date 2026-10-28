@@ -95,6 +95,8 @@ interface S {
   /** les connecteurs MCP : ceux chargés dans la séance (au démarrage de Max), ou la dernière vérification */
   mcp: { servers: McpServer[]; from: 'session' | 'check'; place?: string; at: number; error?: string } | null;
   mcpLoading: boolean;
+  /** la taille du contexte de Max, en tokens (la jauge de la conversation) */
+  ctx: number;
   final: { ok: boolean; text: string; ms: number; stopped?: boolean; at: number } | null;
   /** quand l'équipe s'est mise au travail (pour le chrono) ; null = au repos */
   busySince: number | null;
@@ -190,7 +192,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   connection: 'connecting',
   claude: null,
   dir: '',
-  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false },
+  settings: { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false, skills: false, mcpOff: {}, chefEffort: '', roleEffort: {} },
   quota: null,
   missions: [],
   mission: null,
@@ -206,6 +208,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   chat: [],
   mcp: null,
   mcpLoading: false,
+  ctx: 0,
   final: null,
   busySince: null,
   workMs: 0,
@@ -249,7 +252,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
     set({
       mission: m, chef: emptyChef(), agents: {}, order: [], plan: [], files: [], asks: {}, stats: emptyStats(),
       feed: [], chat: [], final: null, busySince: null, workMs: 0, showFinal: false, planHistory: [],
-      diff: null, diffLoading: false, git: null, gitBusy: null, gitResult: null,
+      diff: null, diffLoading: false, git: null, gitBusy: null, gitResult: null, ctx: 0,
     });
     bus.reset();
   },
@@ -424,6 +427,9 @@ export const useOffice = create<S>((rawSet, rawGet) => {
         if (live) sfx('paper');
         break;
       }
+      case 'ctx':
+        set({ ctx: ev.tokens });
+        break;
       case 'leave': {
         const a = s.agents[ev.who];
         if (!a) break;

@@ -90,6 +90,7 @@ export function agentsJson(settings: Settings, project = false): string {
       prompt: `${m.prompt}\n\n${project ? PROJECT_COMMON : COMMON}`,
       tools: ROLE_TOOLS[m.role],
       model: settings.roleModels?.[m.role] || settings.teamModel || 'sonnet',
+      ...(settings.roleEffort?.[m.role] ? { effort: settings.roleEffort[m.role] } : {}),
     };
   }
   return JSON.stringify(out);
