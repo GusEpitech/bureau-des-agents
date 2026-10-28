@@ -969,3 +969,26 @@ body.resizing { cursor: col-resize; user-select: none; }
 .hist-snip { margin-top: 3px; color: var(--muted, inherit); white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .hist-snip em { font-style: normal; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; margin-right: 4px; }
 .hist-snip mark { background: rgba(var(--accent-rgb), 0.3); color: inherit; border-radius: 3px; padding: 0 2px; }
+
+/* le bilan de consommation */
+.usage-days { margin: 0 0 12px; }
+.usage-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.usage-kpis > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--line); }
+.usage-kpis b { font-size: 18px; }
+.usage-kpis span { font-size: 12px; color: var(--muted); }
+.usage-block { margin-bottom: 14px; }
+.usage-block h4 { margin: 0 0 6px; font-size: 13px; }
+.usage-block h4 small { font-weight: 400; color: var(--muted); }
+.usage-row { display: grid; grid-template-columns: minmax(90px, 160px) 1fr auto; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
+.usage-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-row i { display: block; height: 8px; border-radius: 99px; background: var(--surface2); overflow: hidden; }
+.usage-row u { display: block; height: 100%; border-radius: 99px; background: var(--c, var(--orange)); }
+.usage-row em { font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 128px; text-align: right; }
+.usage-weeks { display: flex; align-items: flex-end; gap: 6px; height: 96px; }
+.usage-weeks > div { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.usage-weeks i { display: block; width: 100%; max-width: 34px; border-radius: 4px 4px 0 0; background: rgba(var(--accent-rgb), 0.75); }
+.usage-weeks small { font-size: 10px; color: var(--muted); }
+.usage-top { display: flex; justify-content: space-between; gap: 10px; width: 100%; padding: 7px 10px; margin-bottom: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface2); text-align: left; font-size: 13px; }
+.usage-top:hover { border-color: rgba(var(--accent-rgb), 0.5); }
+.usage-top span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-top em { font-style: normal; color: var(--muted); white-space: nowrap; }

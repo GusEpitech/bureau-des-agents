@@ -175,6 +175,11 @@ async function handle(m: ClientMsg, send: (m: ServerMsg) => void) {
       send({ t: 'search', q, hits: bureau.search(q) });
       break;
     }
+    case 'stats': {
+      const days = Math.max(0, Math.min(3650, Math.round(Number(m.days) || 0)));
+      send({ t: 'stats', stats: bureau.stats(days) });
+      break;
+    }
     case 'team_history':
       send({ t: 'team_history', entries: await bureau.teamHistory() });
       break;
