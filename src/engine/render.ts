@@ -3,9 +3,10 @@
 // la pièce s'assombrit et ce sont les écrans, les lampes et le néon qui éclairent).
 // Tout se dessine sur une toute petite image (352 × 368 pixels), agrandie sans flou : ça ne coûte presque rien.
 import type { ActKind } from '../../shared/protocol.ts';
+import { Ambience } from './ambience.ts';
 import { furniturePlacement } from './furniture.ts';
 import { pixelText } from './font.ts';
-import { BOARD, CLOCK, FURNITURE, H, NEON, OFFICE_H, T, W, WINDOWS, type Furn } from './layout.ts';
+import { BOARD, CLOCK, FURNITURE, H, NEON, T, W, WINDOWS, type Furn } from './layout.ts';
 import { g2d, makeCanvas, P, rgba, rng, type G } from './pixels.ts';
 import { ANCHOR_X, ANCHOR_Y, robotSprite } from './robots.ts';
 import { drawRoom, neon, signs, type TimeOfDay } from './room.ts';
@@ -51,6 +52,7 @@ function lightSprite(color: string, r: number): HTMLCanvasElement {
 export class Renderer {
   private bg: HTMLCanvasElement | null = null;
   private bgTod: TimeOfDay | null = null;
+  private amb = new Ambience();
   private light = makeCanvas(W, H);
   private lg = g2d(this.light);
   private staticLayer = makeCanvas(W, H);
@@ -102,8 +104,8 @@ export class Renderer {
 
     if (t < world.discoUntil) this.discoBall(g, t);
     world.fx.draw(g);
-    if (tod === 'day') this.sunbeams(g);
-    else this.lighting(g, world, tod, atDesk, t);
+    if (tod !== 'day') this.lighting(g, world, tod, atDesk, t);
+    this.amb.draw(g, world, tod, atDesk, t, Math.sin(t * 0.9) > 0.985 ? 0.25 : 1);
     if (t < world.discoUntil) this.discoSpots(g, t, world.discoUntil - t);
   }
 
@@ -351,27 +353,6 @@ export class Renderer {
     }
   }
 
-  /** En journée : de grands rayons de soleil qui tombent des fenêtres. */
-  private sunbeams(g: G) {
-    g.save();
-    g.beginPath();
-    g.rect(T, 3 * T, W - 2 * T, OFFICE_H - 4 * T);
-    g.clip();
-    g.globalCompositeOperation = 'lighter';
-    for (const w of WINDOWS) {
-      g.fillStyle = 'rgba(255,236,190,0.06)';
-      g.beginPath();
-      g.moveTo(w.x + 4, 48);
-      g.lineTo(w.x + w.w - 4, 48);
-      g.lineTo(w.x + w.w + 26, 120);
-      g.lineTo(w.x + 30, 120);
-      g.closePath();
-      g.fill();
-    }
-    g.globalCompositeOperation = 'source-over';
-    g.restore();
-  }
-
   /** Ajoute une tache de lumière (un halo gardé en mémoire : un simple collage, au lieu d'un nouveau dégradé à chaque image). */
   private add(ctx: G, x: number, y: number, r: number, color: string, a: number) {
     const sp = lightSprite(color, r);
@@ -411,6 +392,9 @@ export class Renderer {
     if (!world.lampsOff.has('lamp-yard-l')) add(8 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
     if (!world.lampsOff.has('lamp-yard-r')) add(13 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
     add(11 * T, 22 * T + 4, 26, '#ffe2b8', 0.3);
+    // les coins plus sombres
+    l.globalCompositeOperation = 'multiply';
+    l.drawImage(this.amb.vignette(tod), 0, 0);
     l.globalCompositeOperation = 'source-over';
     return this.staticLayer;
   }

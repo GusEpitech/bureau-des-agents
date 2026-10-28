@@ -40,7 +40,7 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 - **`src/state/store.ts`** (zustand) range chaque événement, puis le transmet au moteur (`src/state/bus.ts` → `src/engine/world.ts`).
 - **`src/engine/`** : le monde (`world.ts` : les événements, le chat, le mode soirée ; `actor.ts` : un robot et ses gestes ; `nav.ts` : se déplacer
   sans se coincer, A* dans `path.ts` ; `animate.ts` : pose et regard), le dessin (`render.ts`, `room.ts`,
-  `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 368), la caméra et son réalisateur
+  `furniture.ts`, `robots.ts` : tout le pixel art est dessiné en code, sur une image de 352 × 368), la lumière (`render.ts` : la carte de lumière multipliée sur l'image ; `ambience.ts` : rayons des fenêtres, flaques sous les lampes et les écrans, poussière, traînée du néon, vignettage), la caméra et son réalisateur
   (`camera.ts`), les clics (`hits.ts`).
 - **`src/ui/`** : l'interface React. `Office.tsx` (le canevas, les bulles, la boucle d'animation), `Dialog.tsx` (Max et la boîte de
   saisie), `Rooms.tsx` (les fenêtres qu'on ouvre en cliquant), `interact.ts` (ce que fait chaque clic).

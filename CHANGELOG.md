@@ -29,6 +29,8 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - Le tableau du fond affiche la semaine (missions et tokens) quand il n'y a pas de plan.
 - Le chat vient voir ceux qui dorment, et s'endort sur le clavier de Max quand il est absent.
 - Les bulles passent devant le nom des robots qui sont derrière.
+- Une vraie ambiance lumineuse, surtout la nuit : rayons de lune (ou de soleil couchant) qui traversent les fenêtres avec l'ombre des montants, poussière qui flotte dedans, flaques de lumière sur le parquet autour des lampes, lueur colorée des écrans sur les bureaux, traînée du néon, coins plus sombres.
+- Des textures plus détaillées : veines, nœuds et clous du parquet, passages usés, tapis avec franges et motifs, papier peint et boiseries, murs en briques, dalles fissurées et mousse dans la cour, fleurs dans l'herbe.
 
 **L'interface**
 - Une barre du haut avec des boutons nommés, un sélecteur de projet et de mode, des réglages rangés par sujet, une fenêtre de l'équipe plus claire.
