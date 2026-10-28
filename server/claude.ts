@@ -58,6 +58,12 @@ export interface ProcessOptions {
   restricted: boolean;
   /** mode rapide : le chef travaille seul, l'outil Agent n'existe pas */
   solo?: boolean;
+  /** pas de skills : environ 7 000 tokens de moins dans la séance */
+  noSkills?: boolean;
+  /** des outils retirés (les connecteurs MCP coupés dans les réglages) */
+  disallowed?: string[];
+  /** l'effort de réflexion de Max */
+  effort?: string;
 }
 
 type Json = Record<string, any>;
@@ -93,7 +99,9 @@ export class ClaudeProcess {
     if (o.resume) args.push('--resume', o.resume);
     if (o.allowedTools.length) args.push('--allowedTools', o.allowedTools.join(','));
     // pas de questions à choix multiples : le chef pose ses questions dans la conversation
-    args.push('--disallowedTools', o.solo ? 'AskUserQuestion,Agent' : 'AskUserQuestion');
+    args.push('--disallowedTools', [o.solo ? 'AskUserQuestion,Agent' : 'AskUserQuestion', ...(o.disallowed ?? [])].join(','));
+    if (o.noSkills) args.push('--disable-slash-commands');
+    if (o.effort) args.push('--effort', o.effort);
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       BUREAU_DES_AGENTS: '1',
@@ -216,6 +224,7 @@ export class Normalizer {
   /** vrai dès que Claude Code a démarré (message init) */
   started = false;
   sessionId = '';
+  private lastCtx = 0;
 
   private emit: (ev: OfficeEvent) => void;
   private onQuota: (q: Quota) => void;
@@ -327,6 +336,12 @@ export class Normalizer {
 
   private assistant(m: Json) {
     const who: string = m.parent_tool_use_id ?? 'chef';
+    // la taille du contexte de Max (ce qu'il relit à chaque tour) : pour la jauge de la conversation
+    if (who === 'chef') {
+      const u = (m.message?.usage ?? {}) as Json;
+      const ctx = (Number(u.input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0);
+      if (ctx > 0 && Math.abs(ctx - this.lastCtx) >= 500) { this.lastCtx = ctx; this.emit({ k: 'ctx', tokens: ctx }); }
+    }
     const content = Array.isArray(m.message?.content) ? m.message.content : [];
     for (const c of content as Json[]) {
       if (c.type === 'text' && String(c.text ?? '').trim()) {

@@ -9,7 +9,7 @@ import { appendFileSync, existsSync, readFileSync, renameSync, statSync, watch, 
 import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { countStats, emptyStats } from '../shared/activity.ts';
+import { countStats, emptyStats, mcpPrefix } from '../shared/activity.ts';
 import { branchFromPlan, branchName, DEFAULT_BRANCH_PATTERN, tidyBranch } from '../shared/branch.ts';
 import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, Role, ServerMsg, Settings, TeamEntry, TurnUsage, VersionInfo } from '../shared/protocol.ts';
 import { mcpList } from './mcp.ts';
@@ -44,7 +44,7 @@ Le dossier caché « .bureau » garde l'état du bureau et l'enregistrement de c
 Tu peux le supprimer pour tout recommencer.
 `;
 
-const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false };
+const DEFAULT_SETTINGS: Settings = { chefModel: 'sonnet', teamModel: 'sonnet', permission: 'auto', roleModels: {}, workdir: '', recent: [], branchPattern: DEFAULT_BRANCH_PATTERN, quick: false, skills: false, mcpOff: {}, chefEffort: '', roleEffort: {} };
 const CHEF_MODELS = ['', 'sonnet', 'opus', 'haiku', 'fable'];
 const TEAM_MODELS = ['sonnet', 'haiku', 'opus', 'fable', 'inherit'];
 const MODEL_ROLES: Role[] = ['recherche', 'code', 'design', 'redaction', 'analyse'];
@@ -55,6 +55,22 @@ function cleanRoleModels(v: Partial<Record<Role, unknown>>): Partial<Record<Role
   for (const r of MODEL_ROLES) {
     const m = v[r];
     if (typeof m === 'string' && TEAM_MODELS.includes(m)) out[r] = m;
+  }
+  return out;
+}
+const EFFORT_LEVELS = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
+function cleanRoleEffort(v: Partial<Record<Role, unknown>>): Partial<Record<Role, string>> {
+  const out: Partial<Record<Role, string>> = {};
+  for (const r of MODEL_ROLES) { const e = v[r]; if (typeof e === 'string' && e && EFFORT_LEVELS.includes(e)) out[r] = e; }
+  return out;
+}
+/** Les connecteurs coupés par projet : des listes de clés « claude.ai:Canva », sans rien d'autre. */
+function cleanMcpOff(v: Record<string, unknown>): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [dir, list] of Object.entries(v).slice(0, 100)) {
+    if (!Array.isArray(list)) continue;
+    const keys = list.filter((k): k is string => typeof k === 'string' && /^(claude\.ai|local):.{1,80}$/.test(k)).slice(0, 60);
+    if (keys.length) out[dir.slice(0, 500)] = [...new Set(keys)];
   }
   return out;
 }
@@ -194,6 +210,10 @@ export class Bureau {
       recent: workdir ? [workdir, ...cur.recent.filter((d) => d !== workdir)].slice(0, MAX_RECENT) : cur.recent,
       branchPattern: typeof p.branchPattern === 'string' ? p.branchPattern.trim().slice(0, 100) || DEFAULT_BRANCH_PATTERN : cur.branchPattern,
       quick: typeof p.quick === 'boolean' ? p.quick : cur.quick,
+      skills: typeof p.skills === 'boolean' ? p.skills : cur.skills,
+      mcpOff: p.mcpOff && typeof p.mcpOff === 'object' ? cleanMcpOff(p.mcpOff) : cur.mcpOff,
+      chefEffort: typeof p.chefEffort === 'string' && EFFORT_LEVELS.includes(p.chefEffort) ? p.chefEffort : cur.chefEffort,
+      roleEffort: p.roleEffort && typeof p.roleEffort === 'object' ? cleanRoleEffort(p.roleEffort) : cur.roleEffort,
     };
     this.save();
     this.broadcast({ t: 'settings', settings: this.state.settings });
@@ -458,6 +478,9 @@ export class Bureau {
         appendSystemPrompt: chefPrompt(readRules(this.dir), this.ownFolder(cur.mission), cur.mission.branch, !!cur.mission.quick), useApiKey: process.env.BUREAU_USE_API_KEY === '1',
         restricted: !this.ownFolder(cur.mission),
         solo: !!cur.mission.quick,
+        noSkills: !s.skills,
+        disallowed: this.ownFolder(cur.mission) ? (s.mcpOff[cur.mission.folder] ?? s.mcpOff[s.workdir] ?? []).map(mcpPrefix) : [],
+        effort: s.chefEffort || undefined,
       },
       (m) => {
         if (cur.live?.proc !== proc) return; // un ancien processus qui parle encore

@@ -26,3 +26,6 @@ export const readable = (ext: string) => ['md', 'txt', 'csv', 'json', 'markdown'
 
 /** Un chemin affichable à l'écran : le dossier personnel devient « ~ » (pas de nom d'utilisateur dans une vidéo). */
 export const tilde = (p: string) => p.replace(/^\/(?:Users|home)\/[^/]+/, '~');
+
+/** Un nombre de tokens lisible : 940, 62 k, 1,2 M. */
+export const fmtTokens = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} M` : n >= 1000 ? `${Math.round(n / 1000).toLocaleString('fr-FR')} k` : String(n));

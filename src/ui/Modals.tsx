@@ -1,7 +1,7 @@
 // Les fenêtres par-dessus le bureau : la carte du rendu final, la lecture d'un fichier,
 // les missions précédentes, les réglages, et les petites notifications.
 import { useEffect, useMemo, useState } from 'react';
-import { roleInfo } from '../../shared/activity.ts';
+import { EFFORTS, mcpKey, roleInfo } from '../../shared/activity.ts';
 import type { Role } from '../../shared/protocol.ts';
 import { BRANCH_TOKENS, branchName, DEFAULT_BRANCH_PATTERN } from '../../shared/branch.ts';
 import { sfx } from '../audio/sfx.ts';
@@ -202,8 +202,21 @@ export function SettingsPanel() {
           </section>
 
           <section className="set-group">
+            <h3>Économiser des tokens</h3>
+            <p className="set-help">Ce que Max relit à chaque tour compte dans ton énergie. Ces réglages l’allègent. Ils comptent à la prochaine mission.</p>
+            <label className="radio"><input type="checkbox" checked={settings.skills} onChange={(e) => send({ t: 'settings', settings: { skills: e.target.checked } })} /> <span><b>Charger mes skills</b> : environ 7 000 tokens de plus à chaque tour. Décoché, Max travaille sans tes skills (le plus économe).</span></label>
+            <label className="field">
+              <span>Effort de réflexion de Max</span>
+              <select value={settings.chefEffort} onChange={(e) => send({ t: 'settings', settings: { chefEffort: e.target.value } })}>
+                {EFFORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            <McpOffField />
+          </section>
+
+          <section className="set-group">
             <h3>Le travail dans un projet</h3>
-            <p className="set-help">Quand tu choisis un dossier sous la zone de saisie, l’équipe suit ta config Claude Code (réglages, MCP, skills, agents). En mode complet, Max te soumet son plan avant de coder ; en mode rapide, il fait la petite tâche tout seul.</p>
+            <p className="set-help">Quand tu choisis un dossier sous la zone de saisie, l’équipe suit ta config Claude Code (réglages, MCP, agents ; tes skills seulement si tu les actives plus haut). En mode complet, Max te soumet son plan avant de coder ; en mode rapide, il fait la petite tâche tout seul.</p>
             <BranchField />
             <div className="field">
               <span>Les permissions</span>
@@ -289,6 +302,43 @@ function BranchField() {
 const MODEL_ROLES: Role[] = ['recherche', 'code', 'design', 'redaction', 'analyse'];
 
 /** Un cerveau par métier : par exemple Haiku pour l'exploration, Opus pour le code. « Comme l'équipe » = le réglage du dessus. */
+/** Les connecteurs MCP de ce projet : ceux qu'on décoche sont retirés des outils de Max (moins de bruit, moins de gros résultats). */
+function McpOffField() {
+  const workdir = useOffice((s) => s.settings.workdir);
+  const off = useOffice((s) => s.settings.mcpOff);
+  const mcp = useOffice((s) => s.mcp);
+  const loading = useOffice((s) => s.mcpLoading);
+  const send = useOffice((s) => s.send);
+  const load = () => { sfx('click'); useOffice.setState({ mcpLoading: true }); send({ t: 'mcp_list' }); };
+  useEffect(() => { if (workdir && !useOffice.getState().mcp && !useOffice.getState().mcpLoading) load(); }, [workdir]);
+  if (!workdir) return <p className="set-help">Les connecteurs MCP se règlent par projet : choisis un projet sous la zone de saisie.</p>;
+  const mine = off[workdir] ?? [];
+  const servers = (mcp?.servers ?? []).filter((x) => x.status !== 'disabled');
+  const toggle = (key: string, on: boolean) => {
+    const next = on ? mine.filter((k) => k !== key) : [...new Set([...mine, key])];
+    send({ t: 'settings', settings: { mcpOff: { ...off, [workdir]: next } } });
+  };
+  return (
+    <div className="field">
+      <span>Les connecteurs de ce projet</span>
+      {servers.length === 0
+        ? <p className="set-help">{loading ? 'Vérification…' : 'Pas encore de liste.'} <button className="btn small ghost" disabled={loading} onClick={load}>Charger la liste</button></p>
+        : (
+          <div className="mcp-off">
+            {servers.map((x) => {
+              const key = mcpKey(x);
+              const on = !mine.includes(key);
+              return (
+                <label key={key} className="radio"><input type="checkbox" checked={on} onChange={(e) => toggle(key, e.target.checked)} /> <span><b>{x.name}</b> <em>{x.source === 'claude.ai' ? 'compte' : 'local'}{x.tools ? ` · ${x.tools} outils` : ''}</em></span></label>
+              );
+            })}
+          </div>
+        )}
+      <small className="muted">Décoche ceux dont Max n’a pas besoin sur ce projet : ils ne lui sont plus proposés.</small>
+    </div>
+  );
+}
+
 function RoleModels() {
   const settings = useOffice((s) => s.settings);
   const send = useOffice((s) => s.send);
@@ -298,6 +348,11 @@ function RoleModels() {
     if (model) next[r] = model; else delete next[r];
     send({ t: 'settings', settings: { roleModels: next } });
   };
+  const setEffort = (r: Role, e: string) => {
+    const next = { ...settings.roleEffort };
+    if (e) next[r] = e; else delete next[r];
+    send({ t: 'settings', settings: { roleEffort: next } });
+  };
   const team = settings.teamModel === 'inherit' ? 'comme Max' : settings.teamModel;
   return (
     <details className="field adv" open={Object.keys(settings.roleModels).length > 0}>
@@ -306,9 +361,12 @@ function RoleModels() {
         {MODEL_ROLES.map((r) => (
           <label key={r}>
             <b>{roleInfo(r).icon} {roleInfo(r).label}</b>
-            <select value={settings.roleModels[r] ?? ''} onChange={(e) => set(r, e.target.value)}>
+            <select value={settings.roleModels[r] ?? ''} onChange={(e) => set(r, e.target.value)} aria-label="Modèle">
               <option value="">Comme l’équipe ({team})</option>
               {TEAM_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            <select className="effort" value={settings.roleEffort?.[r] ?? ''} aria-label="Effort de réflexion" title="Effort de réflexion de ce métier" onChange={(e) => setEffort(r, e.target.value)}>
+              {EFFORTS.map(([v, l]) => <option key={v} value={v}>{v ? `Effort : ${l.split(' (')[0].toLowerCase()}` : 'Effort : par défaut'}</option>)}
             </select>
           </label>
         ))}
