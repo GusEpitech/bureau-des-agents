@@ -121,6 +121,8 @@ interface S {
   voiceOn: boolean;
   /** en mode tournage, la caméra suit l'action toute seule */
   cameraAuto: boolean;
+  /** la fluidité du dessin : économe (24 / 15 / 8 images par seconde selon l'activité), fluide (60) ou max */
+  fluidity: 'eco' | 'smooth' | 'max';
   /** le mode technique (vraies commandes, sorties, tokens) ; null = jamais réglé (suit le mode projet) */
   tech: boolean | null;
   /** vue développeur (dense) : null = jamais réglée (activée d'office en mode projet) */
@@ -133,6 +135,8 @@ interface S {
   tour: { step: number; text: string } | null;
   historyOpen: boolean;
   settingsOpen: boolean;
+  /** le menu de debug (F3) */
+  debugOpen: boolean;
   vertical: boolean;
   /** écran en hauteur (téléphone) : même mise en page que le cadre vertical */
   portrait: boolean;
@@ -253,6 +257,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   music: { playing: false, index: 0, volume: 0.55 },
   voiceOn: pref('voice', true),
   cameraAuto: pref('cameraAuto', true),
+  fluidity: pref<'eco' | 'smooth' | 'max'>('fluidity', 'eco'),
   tech: pref<boolean | null>('tech', null),
   dense: pref<boolean | null>('dense', null),
   officeHidden: pref('officeHidden', false),
@@ -260,6 +265,7 @@ export const useOffice = create<S>((rawSet, rawGet) => {
   tour: null,
   historyOpen: false,
   settingsOpen: false,
+  debugOpen: false,
   vertical: pref('vertical', false),
   portrait: typeof window !== 'undefined' && window.innerWidth / Math.max(1, window.innerHeight) < 0.8,
   filming: false,

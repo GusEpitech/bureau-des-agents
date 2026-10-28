@@ -7,6 +7,7 @@ import { applySound } from './audio/sound.ts';
 import { denseOf, hasPref, projectModeOf, savePref, techOf, useOffice, type Tod } from './state/store.ts';
 import { AskBar, Dialog } from './ui/Dialog.tsx';
 import { FinalCard, History, SettingsPanel, Toasts, Viewer } from './ui/Modals.tsx';
+import { DebugMenu } from './ui/Debug.tsx';
 import { Office } from './ui/Office.tsx';
 import { Panel } from './ui/Panel.tsx';
 import { Resizer } from './ui/Resizer.tsx';
@@ -90,6 +91,7 @@ export function App() {
         window.dispatchEvent(new CustomEvent('bureau:tab', { detail: Number(e.code.slice(5)) - 1 }));
         return;
       }
+      if (k === 'f3') { e.preventDefault(); useOffice.setState({ debugOpen: !useOffice.getState().debugOpen }); return; }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const s = useOffice.getState();
       if (k === '/') { e.preventDefault(); focusComposer(); return; }
@@ -150,6 +152,7 @@ export function App() {
       <History />
       <SettingsPanel />
       <Toasts />
+      <DebugMenu />
     </div>
   );
 }

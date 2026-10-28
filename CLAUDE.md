@@ -51,6 +51,8 @@ gardent l'extension `.ts`, et rien qui demande une vraie compilation (pas d'`enu
 
 ## Tester sans dépenser l'abonnement
 
+Le menu de debug (touche F3, `src/ui/Debug.tsx`) donne les mesures du dessin (`perf` dans `src/engine/debug.ts`, rempli par la boucle d'`Office.tsx`) et des interrupteurs (`debug` : météo, heure, vitesse, cadence, couches coupées). Pour mesurer ce que coûte un ajout de dessin, coupe sa couche et compare.
+
 Une mission enregistrée se rejoue à l'identique (`H`, puis « Rejouer »), et sans serveur le bureau passe en démo. Dans la console du
 navigateur, `window.__bureau` donne accès au store, au monde, à la caméra et à `playReplay(mission, log, vitesse)`.
 Pour filmer le bureau image par image (un script de capture qui pilote l'horloge), `window.__CAPTURE` fait dessiner chaque image et

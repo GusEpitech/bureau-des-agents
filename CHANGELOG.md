@@ -43,6 +43,7 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - Des textures plus détaillées : veines, nœuds et clous du parquet, passages usés, tapis avec franges et motifs, papier peint et boiseries, murs en briques, dalles fissurées et mousse dans la cour, fleurs dans l'herbe.
 
 **L'interface**
+- Un réglage « Fluidité » (économe, fluide à 60 images par seconde, ou max) dans les Réglages.
 - Une barre du haut avec des boutons nommés, un sélecteur de projet et de mode, des réglages rangés par sujet, une fenêtre de l'équipe plus claire.
 
 **Chargement plus rapide**
@@ -50,6 +51,7 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 - La mise en page ne saute plus au chargement quand tu travailles en mode projet.
 
 **Sous le capot**
+- Un menu de debug (touche F3) : images par seconde, durée de chaque partie du dessin, graphique des dernières images, mémoire, état du monde ; et des interrupteurs pour changer la météo, l'heure, la vitesse, la cadence, ou couper une couche de dessin.
 - `bureau.ts` et `world.ts` sont découpés en modules plus petits (réglages, branches, versions, enregistrements ; robot, déplacements, animation).
 
 ## v0.1.0 (14 octobre 2026)

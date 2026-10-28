@@ -4,6 +4,7 @@
 // Tout se dessine sur une toute petite image (352 × 368 pixels), agrandie sans flou : ça ne coûte presque rien.
 import type { ActKind } from '../../shared/protocol.ts';
 import { Ambience } from './ambience.ts';
+import { debug } from './debug.ts';
 import { weather } from './weather.ts';
 import { yardLife } from './yardlife.ts';
 import { furniturePlacement } from './furniture.ts';
@@ -76,8 +77,7 @@ export class Renderer {
     g.drawImage(this.bg, 0, 0);
     if (tod === 'night') this.twinkle(g, t);
     if (tod === 'day') this.clouds(g, t);
-    weather.windows(g, t);
-    weather.ground(g, t);
+    if (!debug.noWeather) { weather.windows(g, t); weather.ground(g, t); }
     this.clockHands(g, now);
     this.board(g, world, t);
     // le néon (sa couleur change quand on clique dessus ; il grésille de temps en temps)
@@ -108,12 +108,19 @@ export class Renderer {
 
     if (t < world.discoUntil) this.discoBall(g, t);
     world.fx.draw(g);
-    yardLife.leaves(g, t);
-    weather.rain(g, t);
-    if (tod !== 'day') this.lighting(g, world, tod, atDesk, t);
-    if (tod !== 'day') yardLife.glow(g, world, t);
-    this.amb.draw(g, world, tod, atDesk, t, Math.sin(t * 0.9) > 0.985 ? 0.25 : 1);
+    if (!debug.noYard) yardLife.leaves(g, t);
+    if (!debug.noWeather) weather.rain(g, t);
+    if (tod !== 'day' && !debug.noLight) this.lighting(g, world, tod, atDesk, t);
+    if (tod !== 'day' && !debug.noYard) yardLife.glow(g, world, t);
+    if (!debug.noAmbience) this.amb.draw(g, world, tod, atDesk, t, Math.sin(t * 0.9) > 0.985 ? 0.25 : 1);
+    if (debug.grid) this.walkGrid(g, world);
     if (t < world.discoUntil) this.discoSpots(g, t, world.discoUntil - t);
+  }
+
+  /** Pour le menu de debug : les cases où l'on ne peut pas marcher, en rouge. */
+  private walkGrid(g: G, world: World) {
+    g.fillStyle = 'rgba(255,60,60,0.35)';
+    for (let y = 0; y < world.grid.length; y++) for (let x = 0; x < world.grid[y].length; x++) if (!world.grid[y][x] && y >= 3 && y <= 22 && x >= 1 && x <= 20) g.fillRect(x * T, y * T, T, T);
   }
 
   private actor(g: G, a: Actor, world: World) {

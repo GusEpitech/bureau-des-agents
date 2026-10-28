@@ -21,13 +21,15 @@ export class Weather {
   force: 'auto' | 'rain' | 'clear' = 'auto';
   /** 0 (sec) à 1 (grosse pluie) : monte et descend doucement */
   level = 0;
+  /** la force maximale de la pluie (0 à 1) */
+  intensity = 1;
 
   get raining() { return this.level > 0.02; }
 
   private target() {
-    if (this.force !== 'auto') return this.force === 'rain' ? 1 : 0;
+    if (this.force !== 'auto') return this.force === 'rain' ? this.intensity : 0;
     const phase = (Date.now() / 1000) % 900;
-    return phase > 560 && phase < 680 ? 1 : 0;
+    return phase > 560 && phase < 680 ? this.intensity : 0;
   }
 
   update(dt: number) {

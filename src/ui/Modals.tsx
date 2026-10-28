@@ -218,6 +218,7 @@ export function SettingsPanel() {
   const dir = useOffice((s) => s.dir);
   const voiceOn = useOffice((s) => s.voiceOn);
   const cameraAuto = useOffice((s) => s.cameraAuto);
+  const fluidity = useOffice((s) => s.fluidity);
   const tech = useOffice(techOf);
   const dense = useOffice(denseOf);
   if (!open) return null;
@@ -273,6 +274,14 @@ export function SettingsPanel() {
             <h3>L’affichage</h3>
             <label className="radio"><input type="checkbox" checked={dense} onChange={(e) => { useOffice.setState({ dense: e.target.checked }); savePref('dense', e.target.checked); }} /> <span><b>Vue développeur</b> : la conversation en grand, le bureau en petit, sans son par défaut (D)</span></label>
             <label className="radio"><input type="checkbox" checked={tech} onChange={(e) => { useOffice.setState({ tech: e.target.checked }); savePref('tech', e.target.checked); }} /> <span><b>Mode technique</b> : les vraies commandes, leurs sorties, les prompts et les tokens (X)</span></label>
+            <div className="radio" role="group" aria-label="Fluidité">
+              <span><b>Fluidité</b> : plus d’images par seconde, c’est plus doux mais ça chauffe plus (F3 pour mesurer)</span>
+              <span className="fluidity">
+                {([['eco', 'Économe', '8 à 24 images/s'], ['smooth', 'Fluide', '60 images/s'], ['max', 'Max', 'aussi vite que l’écran']] as const).map(([v, label, hint]) => (
+                  <button key={v} type="button" className={`btn ${fluidity === v ? 'primary' : ''}`} title={hint} onClick={() => { useOffice.setState({ fluidity: v }); savePref('fluidity', v); }}>{label}</button>
+                ))}
+              </span>
+            </div>
           </section>
 
           <section className="set-group">

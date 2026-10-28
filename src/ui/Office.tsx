@@ -5,6 +5,7 @@ import { ROLES } from '../../shared/activity.ts';
 import type { ActKind } from '../../shared/protocol.ts';
 import { camera, director, renderer, timeOfDay, world } from '../engine/instance.ts';
 import { hitAt, type Hit } from '../engine/hits.ts';
+import { debug, perf } from '../engine/debug.ts';
 import { jukebox } from '../audio/music.ts';
 import { interact } from './interact.ts';
 import { H, W } from '../engine/layout.ts';
@@ -18,7 +19,7 @@ const ICON: Record<ActKind, string> = {
 };
 
 /** Combien coûte le dessin (pour vérifier que le bureau ne fait pas chauffer l'ordinateur). */
-export const perf = { frames: 0, ms: 0 };
+export { perf };
 
 /** Les bulles accrochées aux robots : on les déplace à chaque image, sans repasser par React. */
 const bubbleEls = new Map<string, HTMLElement>();
@@ -126,11 +127,15 @@ export function Office() {
       const m = cap?.music?.();
       const level = m ? m.level : jukebox.sample();
       world.setMusic(m ? m.on : jukebox.playing, level, m ? m.beat : jukebox.beat);
-      if (!cap && acc < (camMoving || (active && !world.calm) ? 1 / 24 : active ? 1 / 15 : 1 / 8)) return;
+      const rate = debug.fpsCap || (st.fluidity === 'max' ? -1 : st.fluidity === 'smooth' ? 60 : 0);
+      const wait = rate > 0 ? 1 / rate : rate < 0 ? 0 : camMoving || (active && !world.calm) ? 1 / 24 : active ? 1 / 15 : 1 / 8;
+      if (!cap && acc < wait) return;
       const t0 = performance.now();
-      active = world.update(acc);
+      active = world.update(debug.pause ? 0 : acc);
+      const t1 = performance.now();
       acc = 0;
       renderer.draw(lg, world, timeOfDay(todRef.current), new Date());
+      const t2 = performance.now();
       present();
       const { transform, zoomed } = camera.css(scaleRef.current);
       if (stage.current && transform !== lastCss) {
@@ -142,8 +147,8 @@ export function Office() {
         lastCss = transform;
       }
       placeBubbles(scaleRef.current);
-      perf.frames++;
-      perf.ms += performance.now() - t0;
+      const t3 = performance.now();
+      perf.push(t3 - t0, t1 - t0, t2 - t1, t3 - t2, t3);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
