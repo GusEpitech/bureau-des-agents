@@ -3,7 +3,7 @@
 // historique, l'équipe et ses outils, la machine, les rendus et l'aperçu des sites créés.
 import { useEffect, useMemo, useState } from 'react';
 import { ROLE_TOOLS, ROLES, roleInfo, TOOL_INFO } from '../../shared/activity.ts';
-import type { McpServer, PlanItem, Role } from '../../shared/protocol.ts';
+import type { McpServer, PlanItem, Role, TeamEntry } from '../../shared/protocol.ts';
 import { jukebox, TRACKS } from '../audio/music.ts';
 import { sfx } from '../audio/sfx.ts';
 import { world } from '../engine/instance.ts';
@@ -426,26 +426,102 @@ function UsageTab() {
   );
 }
 
+/** Qui est passé au bureau : mission par mission, avec ce que chacun a rendu et consommé. */
+function TeamHistory() {
+  const history = useOffice((s) => s.teamHistory);
+  const send = useOffice((s) => s.send);
+  const connection = useOffice((s) => s.connection);
+  const currentId = useOffice((s) => s.mission?.id ?? null);
+  const busy = useOffice((s) => s.busySince !== null);
+  const [role, setRole] = useState<Role | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => { if (connection === 'live') send({ t: 'team_history' }); }, [connection, send]);
+  const shown = useMemo(() => (history ?? []).filter((e) => !role || e.role === role), [history, role]);
+  const missions = useMemo(() => {
+    const m = new Map<string, { title: string; at: number; entries: TeamEntry[] }>();
+    for (const e of shown) {
+      if (!m.has(e.missionId)) m.set(e.missionId, { title: e.missionTitle, at: e.at, entries: [] });
+      m.get(e.missionId)!.entries.push(e);
+    }
+    return [...m.entries()];
+  }, [shown]);
+  const roles = useMemo(() => {
+    const n = new Map<Role, number>();
+    for (const e of history ?? []) n.set(e.role, (n.get(e.role) ?? 0) + 1);
+    return [...n.entries()].sort((a, b) => b[1] - a[1]);
+  }, [history]);
+  if (connection !== 'live') return <p className="muted">L’historique vit sur ton ordinateur : lance le bureau avec Claude Code pour le voir.</p>;
+  if (!history) return <p className="muted">Chargement…</p>;
+  if (!history.length) return <p className="muted">Personne n’est encore passé au bureau. Donne une mission à Max : ses agents apparaîtront ici.</p>;
+  const total = shown.reduce((n, e) => n + e.tokens, 0);
+  return (
+    <div className="hist-team">
+      <p className="team-sum">
+        <b>{plural(shown.length, 'passage', 'passages')}</b>
+        <span className="sum">sur {plural(missions.length, 'mission', 'missions')}</span>
+        {total > 0 && <span className="sum">{fmtTokens(total)} tokens</span>}
+      </p>
+      {roles.length > 1 && (
+        <div className="chips">
+          <button className={`chip ${role === null ? 'on' : ''}`} onClick={() => setRole(null)}>Tous</button>
+          {roles.map(([r, n]) => (
+            <button key={r} className={`chip ${role === r ? 'on' : ''}`} onClick={() => setRole(role === r ? null : r)}>{roleInfo(r).icon} {roleInfo(r).label} <span className="count">{n}</span></button>
+          ))}
+        </div>
+      )}
+      {missions.map(([id, m], i) => {
+        const tokens = m.entries.reduce((n, e) => n + e.tokens, 0);
+        const failed = m.entries.filter((e) => e.status === 'failed').length;
+        return (
+          <details key={id} className="th-mission" open={i < 2 || !!role}>
+            <summary>
+              <span className="th-title">{m.title}</span>
+              <span className="th-meta">
+                {fmtDate(m.at)} · {plural(m.entries.length, 'agent', 'agents')}{tokens > 0 ? ` · ${fmtTokens(tokens)}` : ''}
+                {failed > 0 && <b className="th-failed"> · {failed} pas fini{failed > 1 ? 's' : ''}</b>}
+              </span>
+              <button className="btn small ghost" title="Rouvre cette mission dans la conversation" onClick={(e) => { e.preventDefault(); sfx('click'); send({ t: 'resume', missionId: id }); useOffice.setState({ modal: null }); }}>Ouvrir</button>
+            </summary>
+            {m.entries.map((e) => {
+              // sans « départ » enregistré : interrompu, sauf si c'est la mission qui tourne en ce moment
+              const status = e.status === 'working' && !(id === currentId && busy) ? 'cut' : e.status;
+              const isOpen = open === `${id}/${e.id}`;
+              return (
+                <div key={e.id} className={`th-row ${status}`} style={{ ['--c' as string]: ROLES[e.role].color }}>
+                  <button aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : `${id}/${e.id}`)}>
+                    <Avatar role={e.role} size={22} />
+                    <span className="th-who"><b>{e.name}</b><small>{roleInfo(e.role).label} · {e.task}</small></span>
+                    <span className="th-nums">{e.tokens ? `${fmtTokens(e.tokens)} tokens` : ''}{e.tokens && e.ms ? ' · ' : ''}{e.ms ? fmtDuration(e.ms) : ''}</span>
+                    <span className={`th-state ${status}`}>{status === 'done' ? '✓ rendu' : status === 'failed' ? '✕ pas fini' : status === 'cut' ? 'interrompu' : '… au travail'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="th-detail">
+                      <p className="small muted">{e.task}</p>
+                      {e.use && (
+                        <p className="small muted" title="Ce qu'il a écrit, la part passée à réfléchir, et ce qu'il a relu (le cache est peu cher, mais ça compte).">
+                          A écrit {fmtTokens(e.use.output)}{e.use.thinking ? ` (dont ${fmtTokens(e.use.thinking)} de réflexion)` : ''} · a relu {fmtTokens(e.use.cacheRead + e.use.cacheWrite + e.use.input)}{e.tools ? ` · ${plural(e.tools, 'outil', 'outils')}` : ''}{e.use.model ? ` · ${e.use.model.replace(/^claude-/, '')}` : ''}
+                        </p>
+                      )}
+                      {e.report ? <div className="md small" dangerouslySetInnerHTML={{ __html: mdToHtml(tidy(e.report)) }} /> : <p className="small muted">Pas de rapport enregistré pour ce passage.</p>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Toute l'équipe : les métiers et leurs outils, la mission en cours, l'historique ──
 function TeamRoom({ role }: { role?: Role }) {
   const [tab, setTab] = useState<'roles' | 'now' | 'history' | 'usage'>(role ? 'roles' : 'now');
   const team = useOffice(useShallow(teamList));
   const settings = useOffice((s) => s.settings);
-  const history = useOffice((s) => s.teamHistory);
-  const send = useOffice((s) => s.send);
-  const connection = useOffice((s) => s.connection);
-  const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => { if (tab === 'history' && connection === 'live') send({ t: 'team_history' }); }, [tab, connection, send]);
   const working = (r: Role) => [...world.actors.values()].filter((a) => a.role === r && a.seated).length;
   const roles: Role[] = ['chef', 'recherche', 'code', 'design', 'redaction', 'analyse'];
-  const missions = useMemo(() => {
-    const m = new Map<string, { title: string; at: number; entries: NonNullable<typeof history> }>();
-    for (const e of history ?? []) {
-      if (!m.has(e.missionId)) m.set(e.missionId, { title: e.missionTitle, at: e.at, entries: [] });
-      m.get(e.missionId)!.entries.push(e);
-    }
-    return [...m.entries()];
-  }, [history]);
   return (
     <Shell title="Toute l’équipe" sub="De vrais agents Claude Code, chacun avec son métier et ses outils" wide>
       <div className="seg tabs">
@@ -498,31 +574,7 @@ function TeamRoom({ role }: { role?: Role }) {
         </div>
       )}
       {tab === 'usage' && <UsageTab />}
-      {tab === 'history' && (
-        connection !== 'live' ? <p className="muted">L’historique vit sur ton ordinateur : lance le bureau avec Claude Code pour le voir.</p>
-          : !history ? <p className="muted">Chargement…</p>
-            : !missions.length ? <p className="muted">Pas encore d’historique.</p>
-              : (
-                <div className="hist-team">
-                  {missions.map(([id, m]) => (
-                    <section key={id}>
-                      <h4>{m.title} <span className="count">{fmtDate(m.at)}</span></h4>
-                      {m.entries.map((e) => (
-                        <div key={e.id} className={`hist-row ${e.status}`} style={{ ['--c' as string]: ROLES[e.role].color }}>
-                          <button onClick={() => setOpen(open === e.id ? null : e.id)}>
-                            <Avatar role={e.role} size={22} />
-                            <b>{e.name}</b>
-                            <span>{roleInfo(e.role).label} · {e.task}</span>
-                            <em>{e.status === 'done' ? '✓' : e.status === 'failed' ? '✕' : '…'} {e.ms ? fmtDuration(e.ms) : ''}</em>
-                          </button>
-                          {open === e.id && e.report && <div className="md small" dangerouslySetInnerHTML={{ __html: mdToHtml(tidy(e.report)) }} />}
-                        </div>
-                      ))}
-                    </section>
-                  ))}
-                </div>
-              )
-      )}
+      {tab === 'history' && <TeamHistory />}
     </Shell>
   );
 }

@@ -31,7 +31,7 @@ export async function teamHistory(recDir: string, missions: MissionInfo[]): Prom
         if (e) e.report = ev.text.slice(0, 600);
       } else if (ev.k === 'leave') {
         const e = byId.get(ev.who);
-        if (e) Object.assign(e, { status: ev.ok ? 'done' : 'failed', tools: ev.tools, tokens: ev.tokens, ms: ev.ms || l.at - e.at });
+        if (e) Object.assign(e, { status: ev.ok ? 'done' : 'failed', tools: ev.tools, tokens: ev.tokens, ms: ev.ms || l.at - e.at, use: ev.use });
       }
     }
     out.push(...[...byId.values()].reverse());

@@ -137,6 +137,8 @@ export interface TeamEntry {
   tokens: number;
   ms: number;
   report: string;
+  /** le détail de ce qu'il a consommé (absent des anciennes missions) */
+  use?: AgentUse;
 }
 
 export interface Settings {
