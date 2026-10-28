@@ -208,6 +208,8 @@ button:disabled { cursor: default; opacity: 0.45; }
 
 /* ── La barre du haut ── */
 .topbar {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -251,7 +253,7 @@ button:disabled { cursor: default; opacity: 0.45; }
 .small { font-size: 12px; }
 .stats { display: flex; gap: 6px; flex: none; }
 .stats span { font: 600 12px var(--pixel); background: var(--surface2); border: 1px solid var(--line); padding: 3px 8px; border-radius: 7px; white-space: nowrap; }
-.tools { display: flex; align-items: center; gap: 4px; flex: none; }
+.topbar-tools { display: flex; align-items: center; gap: 4px; flex: none; }
 .icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: transparent; font-size: 15px; display: grid; place-items: center; }
 .icon-btn:hover { background: var(--surface2); border-color: var(--line); }
 .icon-btn.on { background: rgba(var(--accent-rgb), 0.14); border-color: rgba(var(--accent-rgb), 0.4); }
@@ -263,14 +265,14 @@ button:disabled { cursor: default; opacity: 0.45; }
 .replay-bar { display: flex; align-items: center; gap: 4px; font: 600 12px var(--pixel); color: #15121d; background: var(--grad); padding: 3px 4px 3px 10px; border-radius: 8px; flex: none; }
 .replay-bar button { border: 0; border-radius: 6px; background: rgba(0, 0, 0, 0.16); padding: 2px 7px; font-size: 12px; color: #15121d; }
 
-.app.filming .tools, .app.filming .replay-bar { display: none; }
+.app.filming .topbar-tools, .app.filming .replay-bar { display: none; }
 .app.vertical .topbar { flex-wrap: wrap; gap: 8px 10px; padding: 10px 12px; }
 .app.vertical .brand span, .app.vertical .energy { display: none; }
 .app.vertical .mission-head { order: 3; flex-basis: 100%; }
 .app.vertical .stats { order: 4; flex-basis: 100%; justify-content: space-between; }
 .app.vertical .stats span { flex: 1; text-align: center; font-size: 13px; }
 .app.vertical .plan-step { max-width: 50%; }
-.app.vertical .tools { margin-left: auto; }
+.app.vertical .topbar-tools { margin-left: auto; }
 
 /* ── Le panneau de l'équipe ── */
 .panel { border-left: 1px solid var(--line); background: rgba(10, 10, 13, 0.85); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -522,7 +524,7 @@ kbd { font: 600 11px var(--pixel); background: var(--surface3); border: 1px soli
   .main { grid-template-columns: minmax(0, 1fr); }
   .panel { display: none; }
   .topbar { flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
-  .brand span, .energy, .tools .icon-btn:not(:first-child) { display: none; }
+  .brand span, .energy, .topbar-tools .icon-btn, .topbar-tools .tool-sep { display: none; }
   .mission-head { flex-basis: 100%; order: 3; }
   .stats { order: 4; }
   .dialog-text { font-size: 15px; }
@@ -862,6 +864,37 @@ body.resizing { cursor: col-resize; user-select: none; }
 .bubble-anchor.above { z-index: 3; }
 .bubble-anchor.on-top { z-index: 4; }
 
-.quick-toggle { font: 700 11px var(--pixel); padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: transparent; color: inherit; opacity: 0.75; cursor: pointer; }
-.quick-toggle:hover { opacity: 1; }
-.quick-toggle.on { opacity: 1; color: #1b1300; background: #ffd166; border-color: #ffd166; }
+/* sous la zone de saisie : où Max travaille, et comment (complet ou rapide) */
+.folder-pick { flex-wrap: wrap; gap: 6px 12px; }
+.fp-field { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; color: var(--ink); }
+.fp-mode .seg { flex-wrap: nowrap; }
+.fp-mode .seg button { white-space: nowrap; }
+.seg button.on.quick { background: rgba(255, 209, 102, 0.18); color: #ffd166; box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.45); }
+.fp-hint { flex: 1 1 260px; min-width: 0; font-size: 12px; line-height: 1.35; color: var(--muted); }
+
+/* la barre du haut : des boutons nommés, et le menu « Affichage » pour le reste */
+.tool-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ink); font-family: inherit; font-weight: 600; font-size: 12.5px; white-space: nowrap; cursor: pointer; }
+.tool-btn:hover, .tool-btn.on { background: var(--surface2); border-color: var(--line); }
+.tool-sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+.view-menu { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 25; min-width: 320px; max-width: calc(100vw - 20px); padding: 6px; display: grid; gap: 2px; background: var(--surface2); border: 1px solid var(--line2); border-radius: 12px; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5); animation: fade 0.12s; }
+.menu button { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px; cursor: pointer; }
+.menu button:hover, .menu button:focus-visible { background: var(--surface3); outline: none; }
+.menu button i { font-style: normal; text-align: center; }
+.menu kbd { font: 600 11px var(--pixel); color: var(--muted); background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+.menu-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+@media (max-width: 1380px) { .tool-label { display: none; } .tool-btn { padding: 0 8px; } }
+
+/* les réglages, rangés par thème */
+.modal.settings .modal-body { gap: 18px; }
+.set-group { display: grid; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.set-group h3 { margin: 0; font: 700 13px var(--pixel); letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); }
+.set-help { margin: -4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.field.adv summary { cursor: pointer; font-weight: 700; }
+.field.adv summary em { font-weight: 400; font-style: normal; color: var(--muted); }
+.field.adv[open] summary { margin-bottom: 8px; }
+.radio span b { color: var(--ink); font-weight: 700; }
+.keys-box summary { cursor: pointer; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+
+.project-card .project-name { margin: 0 0 8px; display: grid; gap: 2px; font-size: 15px; }
+.project-card .project-name .path { font-size: 11.5px; word-break: break-all; }
