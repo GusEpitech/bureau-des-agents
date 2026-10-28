@@ -1,11 +1,10 @@
-// L'index de l'historique : une base SQLite (node:sqlite) qui range le texte des missions pour le retrouver vite.
-// Les fichiers .jsonl restent la source de vérité : la base se reconstruit toute seule, on peut la supprimer sans rien perdre.
+// L'index de l'historique : des tables SQLite (FTS5) qui rangent le texte et les chiffres des missions pour les retrouver vite.
+// Les fichiers .jsonl restent la source de vérité : l'index se reconstruit tout seul (seules ces tables, pas l'état du bureau).
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { AgentUse, Logged, MissionInfo, Role, SearchHit, Stats, WeekDay } from '../shared/protocol.ts';
 
-// l'import est dynamique : si cette version de Node n'a pas SQLite, le bureau marche, sans la recherche
-type Db = import('node:sqlite').DatabaseSync;
+import type { Db } from './db.ts';
 
 /** Les marques autour des mots trouvés dans un extrait (le navigateur les met en valeur). */
 export const MARK_OPEN = '\u0001';
@@ -31,13 +30,10 @@ export class Library {
     this.recDir = recDir;
   }
 
-  /** Ouvre (ou crée) la base ; renvoie null si SQLite n'est pas disponible. */
-  static async open(file: string, recDir: string): Promise<Library | null> {
+  /** Prépare l'index dans la base déjà ouverte. */
+  static over(db: Db, recDir: string): Library | null {
     try {
-      const { DatabaseSync } = await import('node:sqlite');
-      const db = new DatabaseSync(file);
-      db.exec('PRAGMA journal_mode = WAL');
-      // une base plus ancienne n'a pas les mêmes colonnes : on la vide, tout se relit des enregistrements
+      // une base plus ancienne n'a pas les mêmes colonnes : on vide l'index (seulement lui), tout se relit des enregistrements
       const version = Number(db.prepare('PRAGMA user_version').get()?.user_version ?? 0);
       if (version < SCHEMA) db.exec(`DROP TABLE IF EXISTS seen; DROP TABLE IF EXISTS agents; DROP TABLE IF EXISTS turns; DROP TABLE IF EXISTS docs; PRAGMA user_version = ${SCHEMA}`);
       db.exec(`

@@ -1,23 +1,25 @@
 // Le bureau, côté serveur. Il vit dans un vrai dossier, ~/Documents/Bureau des agents/ :
 //   - « Règlement du bureau.md » : ce que l'équipe doit savoir sur toi (Max le lit avant chaque mission) ;
 //   - « Missions/ » : un dossier par mission, où l'équipe range tout ce qu'elle produit ;
-//   - « .bureau/ » (caché) : l'état du bureau et l'enregistrement de chaque mission (pour la rejouer).
+//   - « .bureau/ » (caché) : la base SQLite (l'état du bureau, l'index de l'historique) et l'enregistrement de chaque mission (pour la rejouer).
 // Une mission = une séance Claude Code lancée dans le dossier de la mission. On peut lui reparler
 // une fois finie (retouches) : la même séance reprend.
 import { execFile } from 'node:child_process';
-import { appendFileSync, existsSync, renameSync, statSync, watch, writeFileSync } from 'node:fs';
-import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { appendFileSync, existsSync, statSync, watch, writeFileSync } from 'node:fs';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { countStats, emptyStats, mcpPrefix } from '../shared/activity.ts';
 import { branchFromPlan, branchName, tidyBranch } from '../shared/branch.ts';
 import type { ClaudeInfo, FileInfo, GitAction, Logged, MissionInfo, OfficeEvent, Quota, SearchHit, ServerMsg, Stats, WeekDay, Settings, TeamEntry, VersionInfo } from '../shared/protocol.ts';
 import { createBranch, currentBranch, followedBranch, renamedBranch } from './branches.ts';
+import { openDb } from './db.ts';
 import { Library } from './library.ts';
 import { mcpList } from './mcp.ts';
 import { readLog, teamHistory } from './records.ts';
 import { README, readRules, RULES_FILE, RULES_TEMPLATE } from './rules.ts';
 import { DEFAULT_SETTINGS, MAX_RECENT, mergeSettings } from './settings.ts';
+import { StateStore } from './store.ts';
 import type { Current, Live, State } from './types.ts';
 import { addUsage, cleanName, pad, titleOf } from './util.ts';
 import { keepVersion, listVersions, MAX_VERSION_SIZE, versionDirName } from './versions.ts';
@@ -38,6 +40,7 @@ export class Bureau {
   private recDir: string;
   private verDir: string;
   private library: Library | null = null;
+  private store!: StateStore;
   private state: State = { missions: [], settings: { ...DEFAULT_SETTINGS } };
   private saveTimer: NodeJS.Timeout | null = null;
   current: Current | null = null;
@@ -60,16 +63,18 @@ export class Bureau {
     const fresh = !existsSync(this.dir);
     await mkdir(this.recDir, { recursive: true });
     await mkdir(this.missionsDir, { recursive: true });
-    this.library = await Library.open(path.join(this.dir, '.bureau', 'bureau.db'), this.recDir);
+    const db = await openDb(path.join(this.dir, '.bureau', 'bureau.db'));
+    this.store = new StateStore(db, this.stateFile);
+    this.library = db ? Library.over(db, this.recDir) : null;
     if (fresh) await writeFile(path.join(this.dir, 'LISEZ-MOI.md'), README);
     if (!existsSync(path.join(this.dir, RULES_FILE))) await writeFile(path.join(this.dir, RULES_FILE), RULES_TEMPLATE);
-    if (existsSync(this.stateFile)) {
-      try {
-        const s = JSON.parse(await readFile(this.stateFile, 'utf8')) as Partial<State>;
+    try {
+      const s = this.store.load();
+      if (s) {
         this.state = { missions: Array.isArray(s.missions) ? s.missions : [], settings: { ...DEFAULT_SETTINGS, ...(s.settings ?? {}) }, currentId: s.currentId, quota: s.quota ?? null };
         if (this.state.quota) this.quota = freshQuota(this.state.quota);
-      } catch { /* état illisible : on repart proprement */ }
-    }
+      }
+    } catch { /* état illisible : on repart proprement */ }
     // une mission restée « au travail » (le bureau a été coupé pendant qu'elle tournait) est arrêtée
     for (const m of this.state.missions) if (m.status === 'working') m.status = 'stopped';
     // les dossiers récents qui ont disparu sortent de la liste
@@ -745,12 +750,10 @@ export class Bureau {
   /** Sauvegarde groupée (au plus une fois par seconde), écrite d'un coup pour ne jamais laisser un fichier à moitié écrit. */
   save() {
     if (this.saveTimer) return;
-    this.saveTimer = setTimeout(async () => {
+    this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
       try {
-        const tmp = this.stateFile + '.tmp';
-        await writeFile(tmp, JSON.stringify(this.state));
-        await rename(tmp, this.stateFile);
+        this.store.save(this.state);
       } catch (e) {
         console.error('  ⚠  Sauvegarde du bureau impossible :', e instanceof Error ? e.message : e);
       }
@@ -772,10 +775,7 @@ export class Bureau {
       if (cur.live) { cur.live.stopping = true; cur.live.proc.kill(); }
     }
     if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = null; }
-    try {
-      const tmp = this.stateFile + '.tmp';
-      writeFileSync(tmp, JSON.stringify(this.state));
-      renameSync(tmp, this.stateFile);
-    } catch { /* tant pis : l'état de la dernière sauvegarde reste */ }
+    try { this.store.save(this.state); } catch { /* tant pis : l'état de la dernière sauvegarde reste */ }
+    this.library?.close();
   }
 }
