@@ -61,6 +61,7 @@ fournit le rythme de la musique (voir la boucle de `Office.tsx`).
 - **Jamais de chemin complet ni de nom d'utilisateur à l'écran** : `tidy()` (`src/ui/tidy.ts`) et `tilde()` (`src/ui/format.ts`).
 - **Léger** : la boucle dessine au plus 24 images par seconde en mission, 8 au repos, rien quand l'onglet est caché ; environ une
   milliseconde par image. Pas de 3D, pas de bibliothèque lourde.
+- **Chargement** : le serveur compresse le texte (brotli ou gzip, gardé en mémoire) et garde `assets/` un an (noms à empreinte) ; `vite.config.ts` précharge les polices du premier affichage ; `projectModeOf` se souvient du dernier mode (`bureau:lastProject`) tant que le serveur n'a pas répondu, pour que la mise en page ne saute pas (CLS). Ne rends rien dans le panneau qui dépende de `hello` (dossier, projet) avant qu'il soit arrivé.
 - **Tokens** : le contexte de Max est mesuré à chaque tour (événement `ctx`, jauge dans la conversation) et chaque agent rend ses tokens à son départ (`leave.tokens`). Les réglages « Économiser des tokens » (`skills`, `mcpOff` par projet, `chefEffort`, `roleEffort`) se traduisent en options de `claude` (`--disable-slash-commands`, `--disallowedTools mcp__…`, `--effort`, champ `effort` des agents) dans `server/claude.ts`.
 - **Sécurité** : le serveur n'écoute que sur 127.0.0.1 et vérifie l'origine des WebSocket ; l'équipe tourne en `--restricted`, avec
   seulement les outils de son métier, sauf en mode projet, où elle suit ta config Claude Code (réglages, hooks, MCP, skills,

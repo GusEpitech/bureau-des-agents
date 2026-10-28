@@ -87,7 +87,8 @@ function Welcome() {
   const missions = useOffice((s) => s.missions);
   const dir = useOffice((s) => s.dir);
   const send = useOffice((s) => s.send);
-  const connection = useOffice((s) => s.connection);
+  // « live » dès que la connexion s'ouvre, mais ce que dit le serveur (ton projet, ton dossier) arrive un instant après : on attend, pour que rien ne bouge
+  const connection = useOffice((s) => (s.connection === 'live' && !s.claude ? 'connecting' : s.connection));
   const project = useOffice(projectModeOf);
   const workdir = useOffice((s) => s.settings.workdir);
   const quick = useOffice((s) => s.settings.quick);

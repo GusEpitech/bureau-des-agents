@@ -522,14 +522,22 @@ export const useOffice = create<S>((rawSet, rawGet) => {
 export const teamList = (s: S) => s.order.map((id) => s.agents[id]).filter(Boolean);
 
 /** Mode projet : la mission en cours travaille dans un de tes projets (ou, sans mission, un projet est choisi). */
-export const projectModeOf = (s: S) => (s.mission ? !!s.mission.project : s.connection === 'live' && !!s.settings.workdir);
+// Au chargement, le serveur n'a pas encore répondu : on garde le mode du dernier affichage, sinon toute la mise en page change
+// d'un coup (barre du haut, panneau) quand ses réglages arrivent.
+let lastProject = pref('lastProject', false);
+export const projectModeOf = (s: S) =>
+  s.mission ? !!s.mission.project : s.connection === 'live' && s.claude ? !!s.settings.workdir : (s.connection === 'connecting' || s.connection === 'live') && lastProject;
 
 /** Vue développeur : réglée par l'utilisateur, sinon activée d'office en mode projet (jamais en cadre vertical ni en tournage). */
 export const denseOf = (s: S) => !s.vertical && !s.portrait && !s.filming && (s.dense ?? projectModeOf(s));
 
 // le dessin du bureau et les noms des métiers suivent le mode
 setProjectMode(projectModeOf(useOffice.getState()));
-useOffice.subscribe((s) => setProjectMode(projectModeOf(s)));
+useOffice.subscribe((s) => {
+  const project = projectModeOf(s);
+  setProjectMode(project);
+  if (s.connection === 'live' && s.claude && project !== lastProject) { lastProject = project; savePref('lastProject', project); }
+});
 
 /** Le mode technique : réglé à la main, sinon activé en mode projet. */
 export const techOf = (s: S) => s.tech ?? projectModeOf(s);

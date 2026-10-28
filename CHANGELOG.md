@@ -33,6 +33,10 @@ Le bureau devient aussi un outil pour développer sur tes propres dépôts.
 **L'interface**
 - Une barre du haut avec des boutons nommés, un sélecteur de projet et de mode, des réglages rangés par sujet, une fenêtre de l'équipe plus claire.
 
+**Chargement plus rapide**
+- Le serveur compresse les fichiers du bureau (le script passe de 490 Ko à 146 Ko) et les garde un an dans le navigateur ; les polices du premier affichage sont préchargées.
+- La mise en page ne saute plus au chargement quand tu travailles en mode projet.
+
 **Sous le capot**
 - `bureau.ts` et `world.ts` sont découpés en modules plus petits (réglages, branches, versions, enregistrements ; robot, déplacements, animation).
 
