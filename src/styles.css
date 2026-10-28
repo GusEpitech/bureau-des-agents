@@ -920,3 +920,25 @@ body.resizing { cursor: col-resize; user-select: none; }
 .git-step > .btn { justify-self: start; }
 .git-more { justify-content: flex-end; }
 .git-more .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* la fenêtre de l'équipe */
+.team-sum { margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 13px; }
+.team-sum .sum { font: 700 11.5px var(--pixel); padding: 2px 9px; border-radius: 999px; background: var(--surface3); color: var(--muted); }
+.team-sum .sum.working { background: rgba(var(--accent-rgb), 0.18); color: var(--ink); }
+.team-sum .sum.done { background: rgba(61, 220, 151, 0.15); color: var(--green); }
+.team-sum .sum.failed { background: rgba(255, 93, 93, 0.15); color: #ff8a8a; }
+.who-row { grid-template-columns: auto minmax(120px, 0.6fr) 1.4fr minmax(0, 0.9fr); }
+.who-id { display: grid; min-width: 0; line-height: 1.25; }
+.who-id small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.who-state { justify-self: end; text-align: right; }
+.who-state.done { color: var(--green); }
+.who-state.failed { color: #ff8a8a; }
+.role-head > div { min-width: 0; }
+.role-head em { flex: none; white-space: nowrap; }
+.role-meta { display: flex; align-items: center; gap: 10px; }
+.chip-brain { font: 600 11.5px var(--pixel); padding: 2px 8px; border-radius: 999px; background: var(--surface3); border: 1px solid var(--line); }
+.role-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.role-tools span { font: 600 11px ui-monospace, monospace; padding: 2px 6px; border-radius: 5px; background: var(--surface3); color: var(--muted); cursor: help; }
+@media (max-width: 760px) { .who-row { grid-template-columns: auto 1fr; } .who-task { display: none; } }
+.role-head b { white-space: nowrap; }
+.role-meta .role-busy { margin-left: auto; font: 700 11px var(--pixel); font-style: normal; color: #160c06; background: var(--c); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }

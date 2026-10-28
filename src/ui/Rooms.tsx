@@ -351,26 +351,45 @@ function TeamRoom({ role }: { role?: Role }) {
         <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>L’historique</button>
       </div>
       {tab === 'now' && (team.length ? (
-        <div className="who">
-          {team.map((a) => (
-            <button key={a.id} className={`who-row ${a.status}`} style={{ ['--c' as string]: ROLES[a.role].color }} onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'agent', id: a.id } }); }}>
-              <Avatar role={a.role} size={26} />
-              <b>{a.name}</b>
-              <span className="who-task">{roleInfo(a.role).icon} {a.task}</span>
-              <span className="who-state">{a.status === 'done' ? '✓ rapport rendu' : a.status === 'failed' ? '✕ pas fini' : a.act ? a.act.label : '… au travail'}</span>
-            </button>
-          ))}
-        </div>
+        <>
+          <p className="team-sum">
+            <b>{plural(team.length, 'agent', 'agents')}</b>
+            {team.some((a) => a.status === 'working' || a.status === 'reporting') && <span className="sum working">{team.filter((a) => a.status === 'working' || a.status === 'reporting').length} au travail</span>}
+            {team.some((a) => a.status === 'done') && <span className="sum done">{team.filter((a) => a.status === 'done').length} ont rendu leur rapport</span>}
+            {team.some((a) => a.status === 'failed') && <span className="sum failed">{team.filter((a) => a.status === 'failed').length} n’ont pas fini</span>}
+          </p>
+          <div className="who">
+            {team.map((a) => (
+              <button key={a.id} className={`who-row ${a.status}`} style={{ ['--c' as string]: ROLES[a.role].color }} title="Voir son travail" onClick={() => { sfx('open'); useOffice.setState({ modal: { kind: 'agent', id: a.id } }); }}>
+                <Avatar role={a.role} size={26} />
+                <span className="who-id"><b>{a.name}</b><small>{roleInfo(a.role).icon} {roleInfo(a.role).label}</small></span>
+                <span className="who-task">{a.task}</span>
+                <span className={`who-state ${a.status}`}>{a.status === 'done' ? '✓ rapport rendu' : a.status === 'failed' ? '✕ pas fini' : a.act ? a.act.label : '… au travail'}</span>
+              </button>
+            ))}
+          </div>
+        </>
       ) : <p className="muted">Personne au bureau pour l’instant. Donne une mission à Max : il appellera les bons agents.</p>)}
       {tab === 'roles' && (
         <div className="roles">
-          {roles.map((r) => (
-            <div key={r} className={`role-card ${role === r ? 'focus' : ''}`} style={{ ['--c' as string]: ROLES[r].color }}>
-              <div className="role-head"><Avatar role={r} size={34} /><div><b>{roleInfo(r).icon} {roleInfo(r).label}</b><span>{r === 'chef' ? 'Max' : `agent « ${roleInfo(r).type} »`} · cerveau : {r === 'chef' ? settings.chefModel || 'par défaut' : (settings.roleModels[r] ?? settings.teamModel) === 'inherit' ? 'comme Max' : settings.roleModels[r] ?? settings.teamModel}</span></div>{working(r) > 0 && <em>{working(r)} au travail</em>}</div>
-              <p>{roleInfo(r).what}</p>
-              <div className="tools">{ROLE_TOOLS[r].map((t) => <span key={t} title={TOOL_INFO[t] ?? t}>{t}<small>{TOOL_INFO[t] ?? ''}</small></span>)}</div>
-            </div>
-          ))}
+          {roles.map((r) => {
+            const brain = r === 'chef' ? settings.chefModel || 'par défaut' : (settings.roleModels[r] ?? settings.teamModel) === 'inherit' ? 'comme Max' : settings.roleModels[r] ?? settings.teamModel;
+            return (
+              <div key={r} className={`role-card ${role === r ? 'focus' : ''}`} style={{ ['--c' as string]: ROLES[r].color }}>
+                <div className="role-head">
+                  <Avatar role={r} size={34} />
+                  <div><b>{roleInfo(r).icon} {roleInfo(r).label}</b><span>{r === 'chef' ? 'Max, le chef' : `agent « ${roleInfo(r).type} »`}</span></div>
+                </div>
+                <p>{roleInfo(r).what}</p>
+                <div className="role-meta">
+                  <span className="chip-brain" title="Le modèle de ce métier (réglable dans les réglages)">🧠 {brain}</span>
+                  <span className="muted small">{ROLE_TOOLS[r].length} outils</span>
+                  {working(r) > 0 && <em className="role-busy">{working(r)} au travail</em>}
+                </div>
+                <div className="role-tools">{ROLE_TOOLS[r].map((t) => <span key={t} title={`${t} : ${TOOL_INFO[t] ?? ''}`}>{t}</span>)}</div>
+              </div>
+            );
+          })}
         </div>
       )}
       {tab === 'history' && (
