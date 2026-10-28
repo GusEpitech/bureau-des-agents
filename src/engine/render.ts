@@ -428,6 +428,9 @@ export class Renderer {
     if (!world.lampsOff.has('lamp-yard-l')) add(8 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
     if (!world.lampsOff.has('lamp-yard-r')) add(13 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
     add(11 * T, 22 * T + 4, 26, '#ffe2b8', 0.3);
+    // les deux lanternes des piliers du portail
+    add(10 * T - 2, 22 * T - 20, 16, '#ffcf8a', 0.7);
+    add(12 * T + 1, 22 * T - 20, 16, '#ffcf8a', 0.7);
     // les coins plus sombres
     l.globalCompositeOperation = 'multiply';
     l.drawImage(this.amb.vignette(tod), 0, 0);

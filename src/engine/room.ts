@@ -356,6 +356,49 @@ function frontWall(g: G) {
   hline(g, mx, my + 9, 2 * T - 4, '#0d0a14');
 }
 
+/** Le portail : la rue derrière, deux battants de fer ouverts, deux piliers avec leur lanterne, et l'enseigne en bois. */
+function gate(g: G, bottom: number) {
+  const x0 = 10 * T, x1 = 12 * T;
+  // la rue, dehors : sombre en haut, un peu éclairée en bas
+  rect(g, x0, bottom, x1 - x0, T, '#14111e');
+  for (let y = 0; y < 7; y++) rect(g, x0, bottom + 9 + y, x1 - x0, 1, mix('#1a1626', '#3a3552', y / 6));
+  for (let x = x0 + 2; x < x1 - 2; x += 6) rect(g, x, bottom + 12, 3, 1, '#4a4466');
+  // les battants, ouverts contre les piliers : des barreaux entre deux traverses
+  for (const left of [true, false]) {
+    const bx = left ? x0 : x1 - 6;
+    rect(g, bx, bottom + 1, 6, 1, '#4d4666');
+    rect(g, bx, bottom + 13, 6, 1, '#4d4666');
+    rect(g, bx, bottom + 7, 6, 1, '#3b3550');
+    for (let k = 0; k < 6; k += 2) {
+      rect(g, bx + k, bottom + 2, 1, 11, '#2c2740');
+      px(g, bx + k, bottom + 1, '#8a84a3');
+    }
+    px(g, left ? bx + 5 : bx, bottom + 7, '#d9b36a');
+  }
+  // les piliers en pierre, avec un chapeau et une lanterne
+  for (const x of [x0 - 3, x1]) {
+    rect(g, x, bottom - 15, 3, T + 15, '#3b3550');
+    vline(g, x, bottom - 15, T + 15, '#4d4666');
+    vline(g, x + 2, bottom - 15, T + 15, '#2c2740');
+    for (let y = bottom - 12; y < bottom + T; y += 5) hline(g, x, y, 3, '#2c2740');
+    rect(g, x - 1, bottom - 17, 5, 3, '#4d4666');
+    hline(g, x - 1, bottom - 17, 5, '#6a6388');
+    // la lanterne
+    rect(g, x, bottom - 23, 3, 6, '#2b2836');
+    rect(g, x + 1, bottom - 22, 1, 4, '#ffd98a');
+    px(g, x + 1, bottom - 24, '#2b2836');
+  }
+  // l'enseigne : une planche de bois entre les piliers, ses clous et son texte
+  rect(g, x0, bottom - 14, x1 - x0, 9, '#2a1a10');
+  rect(g, x0, bottom - 14, x1 - x0, 1, '#7a5030');
+  rect(g, x0, bottom - 6, x1 - x0, 1, '#1c110a');
+  rect(g, x0 + 1, bottom - 13, x1 - x0 - 2, 7, '#4a2e1a');
+  for (let k = 0; k < 4; k++) hline(g, x0 + 1, bottom - 12 + k * 2, x1 - x0 - 2, k % 2 ? '#563520' : '#4a2e1a');
+  for (const x of [x0 + 2, x1 - 3]) for (const y of [bottom - 12, bottom - 8]) px(g, x, y, '#c9a04a');
+  pixelText(g, 'ENTRÉE', 11 * T - textWidth('ENTRÉE') / 2, bottom - 11, '#2a1a10');
+  pixelText(g, 'ENTRÉE', 11 * T - textWidth('ENTRÉE') / 2, bottom - 12, '#f0dcb0');
+}
+
 /** La cour : un mur de bureau côté dehors, des dalles, de l'herbe sur les bords, le mur du fond et son portail. */
 function yard(g: G) {
   const top = 16 * T, bottom = 22 * T;
@@ -434,13 +477,7 @@ function yard(g: G) {
   bricks(g, 12 * T, bottom, W - 12 * T, T, P.wallTop, 42);
   hline(g, 0, bottom, 10 * T, '#2c2740');
   hline(g, 12 * T, bottom, W - 12 * T, '#2c2740');
-  for (const x of [10 * T - 3, 12 * T]) {
-    rect(g, x, bottom - 6, 3, T + 6, '#3b3550');
-    vline(g, x, bottom - 6, T + 6, '#4d4666');
-    rect(g, x - 1, bottom - 8, 5, 3, '#4d4666');
-  }
-  // une plaque sur le portail
-  pixelText(g, 'ENTRÉE', 11 * T - textWidth('ENTRÉE') / 2, bottom + 4, '#8a84a3');
+  gate(g, bottom);
 }
 
 /** Dessine toute la pièce (sans les meubles) dans une image de la taille du bureau. */
