@@ -136,6 +136,8 @@ export class World {
   /** l'équipe résidente (elle se balade quand elle n'a pas de mission) */
   private residents = new Set<Actor>();
   private demoOn = false;
+  /** vrai quand il ne se passe rien d'important : seuls l'équipe qui se balade et le chat bougent (15 images par seconde suffisent) */
+  calm = true;
   rosterVersion = 0;
   private rosterListeners = new Set<() => void>();
 
@@ -663,6 +665,7 @@ export class World {
       this.animate(a, dt);
       if (a.moving || (a.cur && !(a.res && !a.onMission && a.cur.t === 'wait')) || a.seated || a.cheerUntil > this.time) moving = true;
     }
+    this.calm = !this.missionActive && this.time >= this.discoUntil && !this.musicOn && this.time >= this.printUntil && this.time >= this.boardUntil;
     return moving;
   }
 

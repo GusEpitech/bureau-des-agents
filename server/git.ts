@@ -94,6 +94,23 @@ async function branchExists(folder: string, branch: string) {
   return (await git(folder, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])).code === 0;
 }
 
+/** Les fichiers modifiés ou nouveaux du dépôt (chemins relatifs), pour la liste des rendus : bien plus léger que surveiller tout le dossier. */
+export async function changedFiles(folder: string, max = 200): Promise<string[]> {
+  const r = await git(folder, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], 10_000);
+  if (r.code !== 0) return [];
+  const out: string[] = [];
+  const parts = r.out.split('\0');
+  for (let i = 0; i < parts.length && out.length < max; i++) {
+    const e = parts[i];
+    if (e.length < 4) continue;
+    const st = e.slice(0, 2);
+    if (st.includes('D')) continue; // supprimé : plus rien à montrer
+    if (st.includes('R') || st.includes('C')) i++; // un renommage a un second chemin
+    out.push(e.slice(3));
+  }
+  return out;
+}
+
 /** Où en est le dépôt de la mission. */
 export async function status(m: MissionInfo): Promise<GitStatus> {
   const folder = m.folder;

@@ -118,9 +118,12 @@ export function ChatSection() {
   const stick = useRef(true);
 
   // on suit le bas de la conversation, sauf si tu es remonté la relire
+  // (une seule fois par image : lire scrollHeight force une mise en page, trop cher à chaque message)
   useEffect(() => {
     const b = box.current;
-    if (b && stick.current) b.scrollTop = b.scrollHeight;
+    if (!b || !stick.current) return;
+    const id = requestAnimationFrame(() => { b.scrollTop = b.scrollHeight; });
+    return () => cancelAnimationFrame(id);
   }, [chat.length, typing]);
 
   return (

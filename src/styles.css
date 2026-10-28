@@ -849,3 +849,6 @@ body.resizing { cursor: col-resize; user-select: none; }
 .energy.unknown .energy-label { color: var(--dim); }
 .energy.measuring .energy-bar { animation: pulse-red 1s infinite; }
 .energy-bar i { transition: width 0.6s ease; }
+
+/* Une longue conversation : les messages hors de l'écran ne sont ni mis en page ni dessinés (bien moins de travail à chaque nouveau message) */
+.chat > .chat-msg, .chat > .chat-note, .chat > .tool-group { content-visibility: auto; contain-intrinsic-size: auto 72px; }

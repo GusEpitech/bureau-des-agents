@@ -26,11 +26,34 @@ export const NEON_COLORS: [string, string][] = [
 ];
 const DISCO = ['#ff5fa2', '#3fd8ff', '#ffd166', '#3ddc97', '#a98bff', '#ff8a3d'];
 
+const lightSprites = new Map<string, HTMLCanvasElement>();
+/** Un halo de lumière tout fait (dégradé radial de la couleur, du centre vers le bord) ; on le colle avec la transparence voulue. */
+function lightSprite(color: string, r: number): HTMLCanvasElement {
+  const rr = Math.max(1, Math.round(r));
+  const key = `${color}|${rr}`;
+  let c = lightSprites.get(key);
+  if (!c) {
+    c = makeCanvas(rr * 2, rr * 2);
+    const g = g2d(c);
+    const grd = g.createRadialGradient(rr, rr, 0, rr, rr, rr);
+    grd.addColorStop(0, rgba(color, 1));
+    grd.addColorStop(0.55, rgba(color, 0.45));
+    grd.addColorStop(1, rgba(color, 0));
+    g.fillStyle = grd;
+    g.fillRect(0, 0, rr * 2, rr * 2);
+    lightSprites.set(key, c);
+  }
+  return c;
+}
+
 export class Renderer {
   private bg: HTMLCanvasElement | null = null;
   private bgTod: TimeOfDay | null = null;
   private light = makeCanvas(W, H);
   private lg = g2d(this.light);
+  private staticLayer = makeCanvas(W, H);
+  private sg = g2d(this.staticLayer);
+  private staticKey = '';
   private placed: Placed[] = FURNITURE.map((f) => { const p = furniturePlacement(f); return { f, c: p.s.c, x: p.x, y: p.y, sortY: p.sortY }; });
   private stars: { x: number; y: number; p: number }[] = [];
 
@@ -312,25 +335,28 @@ export class Renderer {
     g.restore();
   }
 
-  private lighting(g: G, world: World, tod: TimeOfDay, atDesk: Map<string, Actor>, t: number) {
-    const l = this.lg;
+  /** Ajoute une tache de lumière (un halo gardé en mémoire : un simple collage, au lieu d'un nouveau dégradé à chaque image). */
+  private add(ctx: G, x: number, y: number, r: number, color: string, a: number) {
+    const sp = lightSprite(color, r);
+    ctx.globalAlpha = a;
+    ctx.drawImage(sp, Math.round(x - sp.width / 2), Math.round(y - sp.height / 2));
+    ctx.globalAlpha = 1;
+  }
+
+  /** Les lumières qui ne bougent pas (néon, fenêtres, lampadaires…) : dessinées une fois, refaites seulement quand elles changent. */
+  private staticLights(world: World, tod: TimeOfDay, flick: number): HTMLCanvasElement {
+    const night = tod === 'night';
+    const key = `${tod}|${world.neonIndex}|${flick}|${['lamp', 'lamp-r', 'lamp-yard-l', 'lamp-yard-r'].map((id) => (world.lampsOff.has(id) ? 0 : 1)).join('')}`;
+    if (this.staticKey === key) return this.staticLayer;
+    this.staticKey = key;
+    const l = this.sg;
     l.globalCompositeOperation = 'source-over';
     l.fillStyle = AMBIENT[tod];
     l.fillRect(0, 0, W, H);
     l.globalCompositeOperation = 'lighter';
-    const night = tod === 'night';
-    const add = (x: number, y: number, r: number, color: string, a: number) => {
-      const grd = l.createRadialGradient(x, y, 0, x, y, r);
-      grd.addColorStop(0, rgba(color, a));
-      grd.addColorStop(0.55, rgba(color, a * 0.45));
-      grd.addColorStop(1, rgba(color, 0));
-      l.fillStyle = grd;
-      l.fillRect(x - r, y - r, r * 2, r * 2);
-    };
+    const add = (x: number, y: number, r: number, color: string, a: number) => this.add(l, x, y, r, color, a);
     // le néon (il grésille de temps en temps)
-    const flick = Math.sin(t * 0.9) > 0.985 ? 0.25 : 1;
-    const neonCol = NEON_COLORS[world.neonIndex][0];
-    add(NEON.x + 12, NEON.y + 12, 52, neonCol, 0.75 * flick);
+    add(NEON.x + 12, NEON.y + 12, 52, NEON_COLORS[world.neonIndex][0], 0.75 * flick);
     // les fenêtres : coucher de soleil ou clair de lune
     for (const w of WINDOWS) add(w.x + w.w / 2, w.y + w.h + 8, 58, night ? '#7080d0' : '#ff9a6a', night ? 0.42 : 0.55);
     // le tableau du plan, éclairé
@@ -338,20 +364,32 @@ export class Renderer {
     // la lampe du chef et le liseré orange de son bureau
     add(9 * T + 12, 7 * T - 6, 40, '#ffd9a0', 0.8);
     add(11 * T, 7 * T + 14, 44, P.orange, 0.32);
-    // les lampadaires, le café, le serveur
+    // les lampadaires, la machine à café, le serveur, la porte
     if (!world.lampsOff.has('lamp')) add(1 * T + 8, 14 * T - 12, 52, '#ffcf8a', 0.85);
     if (!world.lampsOff.has('lamp-r')) add(20 * T + 8, 14 * T - 12, 52, '#ffcf8a', 0.85);
+    add(16 * T + 14, 14 * T - 8, 14, P.orange, 0.5);
+    add(14 * T + 4, 3 * T + 6, 18, '#5fd0ff', 0.35);
+    add(11 * T, 15 * T + 8, 30, '#ffe2b8', 0.4);
+    // la cour : deux lampadaires, et le portail
+    if (!world.lampsOff.has('lamp-yard-l')) add(8 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
+    if (!world.lampsOff.has('lamp-yard-r')) add(13 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
+    add(11 * T, 22 * T + 4, 26, '#ffe2b8', 0.3);
+    l.globalCompositeOperation = 'source-over';
+    return this.staticLayer;
+  }
+
+  private lighting(g: G, world: World, tod: TimeOfDay, atDesk: Map<string, Actor>, t: number) {
+    const l = this.lg;
+    const flick = Math.sin(t * 0.9) > 0.985 ? 0.25 : 1;
+    const neonCol = NEON_COLORS[world.neonIndex][0];
+    l.globalCompositeOperation = 'source-over';
+    l.drawImage(this.staticLights(world, tod, flick), 0, 0);
+    l.globalCompositeOperation = 'lighter';
+    const add = (x: number, y: number, r: number, color: string, a: number) => this.add(l, x, y, r, color, a);
     // le jukebox, qui pulse sur la musique
     if (world.musicOn) add(15 * T, 13 * T + 4, 30 + world.musicLevel * 18, ['#ff5fa2', P.orange, '#3fd8ff'][Math.floor(t * 1.5) % 3], 0.35 + world.musicLevel * 0.45);
     // les yeux du chat brillent dans le noir
     add(world.cat.x + (world.cat.right ? 4 : -4), world.cat.y - 8, 4, P.orange, 0.5);
-    add(16 * T + 14, 14 * T - 8, 14, P.orange, 0.5);
-    add(14 * T + 4, 3 * T + 6, 18, '#5fd0ff', 0.35);
-    add(11 * T, 15 * T + 8, 30, '#ffe2b8', 0.4);
-    // la cour : deux lampadaires, et le bout rouge des cendriers
-    if (!world.lampsOff.has('lamp-yard-l')) add(8 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
-    if (!world.lampsOff.has('lamp-yard-r')) add(13 * T + 8, 19 * T - 12, 56, '#ffcf8a', 0.85);
-    add(11 * T, 22 * T + 4, 26, '#ffe2b8', 0.3);
     if (t < world.printUntil) add(12 * T + 8, 4 * T - 2, 16, '#9effa8', 0.6);
     // les écrans éclairent les visages
     for (const a of atDesk.values()) {
@@ -372,13 +410,7 @@ export class Renderer {
     g.drawImage(this.light, 0, 0);
     // un léger halo sur ce qui brille
     g.globalCompositeOperation = 'lighter';
-    const glow = (x: number, y: number, r: number, color: string, a: number) => {
-      const grd = g.createRadialGradient(x, y, 0, x, y, r);
-      grd.addColorStop(0, rgba(color, a));
-      grd.addColorStop(1, rgba(color, 0));
-      g.fillStyle = grd;
-      g.fillRect(x - r, y - r, r * 2, r * 2);
-    };
+    const glow = (x: number, y: number, r: number, color: string, a: number) => this.add(g, x, y, r, color, a);
     glow(NEON.x + 12, NEON.y + 12, 20, neonCol, 0.32 * flick);
     for (const a of world.actors.values()) if (a.alpha > 0.3) glow(a.x, (a.seated && a.seat ? a.seat.y : a.y) - 13, 4, P.orange, 0.35);
     for (const a of atDesk.values()) if (t - a.actAt < 9) glow(a.seat!.x, a.seat!.y - 6, 8, a.act ? SCREEN[a.act] : '#ffffff', 0.18);

@@ -496,6 +496,7 @@ export class Bureau {
     this.broadcast({ t: 'mission', mission: m });
     this.save();
     void this.refreshQuota(true); // la jauge d'énergie se met à jour à chaque fin de mission
+    if (this.ownFolder(m)) void this.syncProjectFiles(cur);
     // Max reste disponible un moment pour les retouches, puis s'endort (il reprendra sa séance si on lui reparle)
     if (cur.idleTimer) clearTimeout(cur.idleTimer);
     cur.idleTimer = setTimeout(() => {
@@ -542,6 +543,8 @@ export class Bureau {
 
   // ── Les fichiers produits par l'équipe ──
   private watch(cur: Current) {
+    // en mode projet, on ne surveille pas tout le dépôt (node_modules, .git… : des milliers de dossiers) : git dit ce qui a changé, en fin de tour
+    if (this.ownFolder(cur.mission)) return;
     const folder = cur.mission.folder;
     try {
       cur.watcher = watch(folder, { recursive: true }, (_type, name) => {
@@ -554,6 +557,15 @@ export class Bureau {
       });
       cur.watcher.on('error', () => {});
     } catch { cur.watcher = null; }
+  }
+
+  /** Mode projet : les fichiers que git voit changés deviennent les rendus de la mission. */
+  private async syncProjectFiles(cur: Current) {
+    for (const rel of await gitOps.changedFiles(cur.mission.folder)) {
+      if (this.current !== cur) return;
+      if (rel.split('/').some((p) => IGNORED_DIRS.has(p))) continue;
+      await this.fileChanged(cur, rel);
+    }
   }
 
   private async fileChanged(cur: Current, rel: string) {
