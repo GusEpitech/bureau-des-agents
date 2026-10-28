@@ -8,6 +8,7 @@ import { g2d, makeCanvas, rgba, rng, type G } from './pixels.ts';
 import type { TimeOfDay } from './room.ts';
 import type { Actor } from './actor.ts';
 import type { World } from './world.ts';
+import { weather } from './weather.ts';
 
 const SCREEN: Record<ActKind, string> = {
   search: '#7fd6ff', web: '#7fffc4', read: '#cfe3ff', write: '#fff0d4', edit: '#fff0d4', bash: '#8affb0',
@@ -203,6 +204,16 @@ export class Ambience {
     }
     g.globalAlpha = 1;
     g.restore();
+
+    // la pluie : les lampadaires de la cour se reflètent sur les dalles mouillées
+    if (weather.raining && night) {
+      g.globalCompositeOperation = 'lighter';
+      for (const lamp of FLOOR_LAMPS.slice(2)) {
+        if (world.lampsOff.has(lamp.id)) continue;
+        stamp(g, lamp.x, lamp.y + 22, 26, 11, '#ffc979', 0.2 * weather.level);
+      }
+      g.globalCompositeOperation = 'source-over';
+    }
 
     // le vignettage : la carte de lumière le porte déjà le soir et la nuit ; le jour (sans carte), on le colle ici
     if (tod === 'day') {

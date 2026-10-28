@@ -1,6 +1,7 @@
 // Le monde du bureau : les robots, ce qu'ils font, où ils vont. Chaque événement venu de Claude Code
 // devient une petite mise en scène : un membre de l'équipe arrive par la porte, va à son bureau, tape
 // ou lit selon ce qu'il fait vraiment, se lève pour rendre son rapport au chef, puis repart.
+import { weather } from './weather.ts';
 import type { ActKind, OfficeEvent, PlanItem, Role, WeekDay } from '../../shared/protocol.ts';
 import { Actor, smokePhase, smokeTip, type Pt, type Task } from './actor.ts';
 import { animateActor } from './animate.ts';
@@ -639,7 +640,8 @@ export class World {
     const dt = Math.min(0.1, dtReal) * this.speed;
     this.time += dt;
     this.fx.update(dt);
-    let moving = this.fx.busy || this.time < this.printUntil || this.time < this.boardUntil;
+    weather.update(dt);
+    let moving = this.fx.busy || weather.raining || this.time < this.printUntil || this.time < this.boardUntil;
     const chef = this.chef;
     // la vapeur du café
     if (this.time > this.steamAt) { this.steamAt = this.time + 0.35; this.fx.steam(16 * T + 11, 13 * T + 4); }

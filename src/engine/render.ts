@@ -4,6 +4,8 @@
 // Tout se dessine sur une toute petite image (352 × 368 pixels), agrandie sans flou : ça ne coûte presque rien.
 import type { ActKind } from '../../shared/protocol.ts';
 import { Ambience } from './ambience.ts';
+import { weather } from './weather.ts';
+import { yardLife } from './yardlife.ts';
 import { furniturePlacement } from './furniture.ts';
 import { pixelText } from './font.ts';
 import { BOARD, CLOCK, FURNITURE, H, NEON, T, W, WINDOWS, type Furn } from './layout.ts';
@@ -74,6 +76,8 @@ export class Renderer {
     g.drawImage(this.bg, 0, 0);
     if (tod === 'night') this.twinkle(g, t);
     if (tod === 'day') this.clouds(g, t);
+    weather.windows(g, t);
+    weather.ground(g, t);
     this.clockHands(g, now);
     this.board(g, world, t);
     // le néon (sa couleur change quand on clique dessus ; il grésille de temps en temps)
@@ -104,7 +108,10 @@ export class Renderer {
 
     if (t < world.discoUntil) this.discoBall(g, t);
     world.fx.draw(g);
+    yardLife.leaves(g, t);
+    weather.rain(g, t);
     if (tod !== 'day') this.lighting(g, world, tod, atDesk, t);
+    if (tod !== 'day') yardLife.glow(g, world, t);
     this.amb.draw(g, world, tod, atDesk, t, Math.sin(t * 0.9) > 0.985 ? 0.25 : 1);
     if (t < world.discoUntil) this.discoSpots(g, t, world.discoUntil - t);
   }
@@ -123,6 +130,7 @@ export class Renderer {
     }
     const sprite = robotSprite(a.role, a.pose, seated ? 'down' : a.dir, a.frame, a.eyes);
     g.drawImage(sprite, x - ANCHOR_X, y - ANCHOR_Y);
+    if (seated && a.act && world.time - a.actAt < 9) this.screenGlint(g, a, x, y, world.time);
     if (a.doing === 'notes' && !a.moving) {
       // le carnet tenu devant lui, le stylo qui court sur la page
       g.fillStyle = P.orangeDark;
@@ -242,6 +250,14 @@ export class Renderer {
     if (f.kind === 'coffee') {
       g.fillStyle = Math.floor(t * 1.5) % 2 ? P.orange : P.orangeDark;
       g.fillRect(p.x + 14, p.y + 2, 1, 1);
+      // la vapeur qui monte des deux tasses
+      for (const [mx, k] of [[23, 0], [30, 1]]) {
+        for (let i = 0; i < 3; i++) {
+          const u = ((t * 0.55 + i / 3 + k * 0.37) % 1);
+          g.fillStyle = `rgba(255,255,255,${(0.5 * (1 - u)).toFixed(2)})`;
+          g.fillRect(p.x + mx + Math.round(Math.sin(u * 6 + k + i) * 1.2), p.y + 4 - Math.round(u * 7), 1, 1);
+        }
+      }
     }
   }
 
@@ -322,6 +338,19 @@ export class Renderer {
       }
       g.restore();
     }
+  }
+
+  /** Le reflet de l'écran sur la visière d'un robot qui travaille : de petites lignes de code qui défilent. */
+  private screenGlint(g: G, a: Actor, x: number, y: number, t: number) {
+    const col = SCREEN[a.act!];
+    g.fillStyle = col;
+    const step = Math.floor(t * 7);
+    for (let row = 0; row < 3; row++) {
+      const len = 2 + ((step * 3 + row * 5 + a.id.length) % 5);
+      g.globalAlpha = 0.28 * a.alpha;
+      g.fillRect(x - 4 + (row % 2), y - 15 + row * 2, Math.min(len, 8), 1);
+    }
+    g.globalAlpha = a.alpha;
   }
 
   /** Le petit cube orange au dos de l'ordinateur, qui s'allume quand l'agent travaille. */

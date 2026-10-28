@@ -12,11 +12,12 @@ import { startTour } from './ui/tour.ts';
 import { installCopy } from './ui/md.ts';
 import { perf } from './ui/Office.tsx';
 import { connect, playReplay } from './net/link.ts';
+import { weather } from './engine/weather.ts';
 import { useOffice } from './state/store.ts';
 
 applySound(useOffice.getState().sound);
 installCopy();
 // pour les tests et les captures : rejouer une mission depuis la console
-(window as unknown as { __bureau: unknown }).__bureau = { playReplay, useOffice, world, perf, camera, jukebox, party, startTour };
+(window as unknown as { __bureau: unknown }).__bureau = { playReplay, useOffice, world, perf, camera, jukebox, party, startTour, weather };
 connect();
 createRoot(document.getElementById('root')!).render(<App />);
